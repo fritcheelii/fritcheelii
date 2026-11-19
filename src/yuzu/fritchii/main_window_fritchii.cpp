@@ -8,6 +8,7 @@
 #include <QPushButton>
 #include <QStatusBar>
 
+#include "common/settings.h"
 #include "core/core.h"
 #include "qt_common/qt_common.h"
 #include "qt_common/util/game.h"
@@ -87,6 +88,27 @@ void MainWindow::SetUpFritchiiUi() {
 #endif
     };
     statusBar()->insertPermanentWidget(0, FritchiiUi::MakeGraphicsButton(this, graphics));
+
+    // Ocarina of Time 60 FPS / 30 FPS live toggle button right next to GRAPHICS.
+    auto* const oot_fps_button = new QPushButton(this);
+    oot_fps_button->setObjectName(QStringLiteral("OotFpsStatusBarButton"));
+    oot_fps_button->setCheckable(true);
+    oot_fps_button->setFocusPolicy(Qt::NoFocus);
+    oot_fps_button->setToolTip(
+        tr("Ocarina of Time frame rate. Click to switch between 60 FPS and "
+           "30 FPS (lower-end PCs); it takes effect at once."));
+    const auto update_oot_fps = [oot_fps_button]() {
+        const bool fps30 = Settings::values.oot_30fps.GetValue();
+        oot_fps_button->setChecked(fps30);
+        oot_fps_button->setText(fps30 ? QObject::tr("30 FPS") : QObject::tr("60 FPS"));
+    };
+    update_oot_fps();
+    connect(oot_fps_button, &QPushButton::clicked, this, [this, update_oot_fps]() {
+        Settings::values.oot_30fps.SetValue(!Settings::values.oot_30fps.GetValue());
+        update_oot_fps();
+        OnSaveConfig();
+    });
+    statusBar()->insertPermanentWidget(1, oot_fps_button);
 
     // Fritchii Home screen + left slim icon rail + top-right Saves & Credits buttons.
     FritchiiUi::HomeHooks home{

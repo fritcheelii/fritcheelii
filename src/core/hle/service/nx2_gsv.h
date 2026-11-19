@@ -2091,6 +2091,12 @@ private:
         if (forced_interval != 0) {
             swap_interval = forced_interval;
         }
+        // Ocarina of Time 30 FPS mode (lower-end PCs): two vblanks per frame (takes effect live).
+        constexpr u64 OcarinaOfTimeId = 0x0400486024DEC000ULL;
+        if (process != nullptr && process->GetProgramId() == OcarinaOfTimeId &&
+            Settings::values.oot_30fps.GetValue()) {
+            swap_interval = (std::max)(swap_interval, 2U);
+        }
         const u32 refresh_rate = (timing & 0xffff) >= 30 && (timing & 0xffff) <= 240 ? timing & 0xffff : 60;
         if (trace) {
             m_frame_trace.interval = swap_interval;

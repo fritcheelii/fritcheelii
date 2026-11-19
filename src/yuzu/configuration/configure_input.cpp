@@ -7,6 +7,11 @@
 #include <memory>
 #include <thread>
 
+#include <QComboBox>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QVBoxLayout>
+
 #include "common/settings.h"
 #include "common/settings_enums.h"
 #include "core/core.h"
@@ -104,8 +109,32 @@ void ConfigureInput::Initialize(InputCommon::InputSubsystem* input_subsystem,
     };
 
     for (std::size_t i = 0; i < player_tabs.size(); ++i) {
-        QHBoxLayout* tab_layout = new QHBoxLayout(player_tabs[i]);
-        tab_layout->addWidget(player_controllers[i]);
+        if (i == 0) {
+            auto* tab_layout = new QVBoxLayout(player_tabs[i]);
+            tab_layout->setContentsMargins(6, 4, 6, 4);
+            tab_layout->setSpacing(4);
+
+            auto* icons_row = new QHBoxLayout();
+            icons_row->setContentsMargins(6, 2, 6, 2);
+            auto* icons_lbl = new QLabel(tr("Button Icons (Zelda OoT):"), player_tabs[i]);
+            combo_oot_button_icons = new QComboBox(player_tabs[i]);
+            combo_oot_button_icons->addItems({tr("Switch (Default)"), tr("Xbox"), tr("PlayStation"),
+                                              tr("PC (Keyboard/Mouse)"), tr("Steam Deck")});
+            combo_oot_button_icons->setToolTip(
+                tr("Selects on-screen controller button prompts from "
+                   "user/load/0400486024DEC000/button_icons/<style>. Requires game restart."));
+            const int cur_icons = Settings::values.oot_button_icons.GetValue();
+            combo_oot_button_icons->setCurrentIndex(
+                cur_icons >= 0 && cur_icons < combo_oot_button_icons->count() ? cur_icons : 0);
+            icons_row->addWidget(icons_lbl);
+            icons_row->addWidget(combo_oot_button_icons);
+            icons_row->addStretch(1);
+            tab_layout->addLayout(icons_row);
+            tab_layout->addWidget(player_controllers[i]);
+        } else {
+            QHBoxLayout* tab_layout = new QHBoxLayout(player_tabs[i]);
+            tab_layout->addWidget(player_controllers[i]);
+        }
         connect(player_controllers[i], &ConfigureInputPlayer::Connected, [this, i](bool checked) {
             // Ensures that connecting a controller changes the number of players
             if (connected_controller_checkboxes[i]->isChecked() != checked) {
@@ -231,6 +260,9 @@ void ConfigureInput::ApplyConfiguration() {
 
     Settings::values.vibration_enabled.SetValue(ui->vibrationGroup->isChecked());
     Settings::values.motion_enabled.SetValue(ui->motionGroup->isChecked());
+    if (combo_oot_button_icons) {
+        Settings::values.oot_button_icons.SetValue(combo_oot_button_icons->currentIndex());
+    }
     Settings::values.players.SetGlobal(was_global);
 }
 
@@ -254,6 +286,11 @@ void ConfigureInput::LoadConfiguration() {
 
     ui->vibrationGroup->setChecked(Settings::values.vibration_enabled.GetValue());
     ui->motionGroup->setChecked(Settings::values.motion_enabled.GetValue());
+    if (combo_oot_button_icons) {
+        const int cur_icons = Settings::values.oot_button_icons.GetValue();
+        combo_oot_button_icons->setCurrentIndex(
+            cur_icons >= 0 && cur_icons < combo_oot_button_icons->count() ? cur_icons : 0);
+    }
 }
 
 void ConfigureInput::LoadPlayerControllerIndices() {

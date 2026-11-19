@@ -56,11 +56,8 @@
 namespace RoundedPopups {
 
 [[nodiscard]] bool GlassSupported() {
-    static const bool supported = [] {
-        const char* const value = std::getenv("CHEEZYEMU_GLASS");
-        return value == nullptr || value[0] != '0';
-    }();
-    return supported;
+    // FritCheeLii uses the pure matte Graphite Dark theme (no Cheezy honey-glass overlay).
+    return false;
 }
 
 namespace {
@@ -711,9 +708,9 @@ private:
         const HWND hwnd = reinterpret_cast<HWND>(widget->winId());
         const BOOL dark = TRUE;
         DwmSetWindowAttribute(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
-        const COLORREF caption = RGB(0x2E, 0x22, 0x0E);
+        const COLORREF caption = RGB(0x11, 0x11, 0x13);
         DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &caption, sizeof(caption));
-        const COLORREF border = RGB(0x9A, 0x74, 0x30);
+        const COLORREF border = RGB(0x28, 0x28, 0x30);
         DwmSetWindowAttribute(hwnd, 34 /* DWMWA_BORDER_COLOR */, &border, sizeof(border));
 #endif
     }

@@ -153,12 +153,17 @@ std::vector<Game> CollectGames(QStandardItemModel* model, const QPixmap& fallbac
         if (game.title.isEmpty()) {
             game.title = QFileInfo(path).completeBaseName();
         }
-        game.icon = item->data(Qt::DecorationRole).value<QPixmap>();
+        if (game.program_id == OcarinaOfTime) {
+            game.icon = LocalCover(path);
+            if (IsBlank(game.icon)) {
+                game.icon = QPixmap(QStringLiteral(":/fritchii/icons/oot_cover.jpg"));
+            }
+        }
+        if (IsBlank(game.icon)) {
+            game.icon = item->data(Qt::DecorationRole).value<QPixmap>();
+        }
         if (IsBlank(game.icon)) {
             game.icon = LocalCover(path);
-        }
-        if (IsBlank(game.icon) && game.program_id == OcarinaOfTime) {
-            game.icon = QPixmap(QStringLiteral(":/fritchii/icons/oot_cover.jpg"));
         }
         if (IsBlank(game.icon)) {
             // No icon in the dump and none next to it: Fritchii's own icon, not an empty square.

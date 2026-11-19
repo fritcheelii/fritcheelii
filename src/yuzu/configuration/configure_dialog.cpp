@@ -171,33 +171,12 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
                "Recommended for 4 GB GPUs (e.g. GTX 1650)."),
             Settings::values.test_vram_gc_4gb.GetValue());
 
-        auto* btn_row = new QHBoxLayout();
-        auto* btn_lbl = new QLabel(tr("Button Icons (Zelda OoT):"), content);
-        auto* combo_icons = new QComboBox(content);
-        combo_icons->addItems({tr("Switch (Default)"), tr("Xbox"), tr("PlayStation"),
-                               tr("PC (Keyboard/Mouse)"), tr("Steam Deck")});
-        const int cur_icons = Settings::values.oot_button_icons.GetValue();
-        combo_icons->setCurrentIndex(cur_icons >= 0 && cur_icons < combo_icons->count() ? cur_icons
-                                                                                        : 0);
-        btn_row->addWidget(btn_lbl);
-        btn_row->addWidget(combo_icons, 1);
-        v->addLayout(btn_row);
-
-        auto* btn_note = new QLabel(
-            tr("Selects on-screen controller button prompts from user/load/0400486024DEC000/"
-               "button_icons/<style>. Requires game restart."),
-            content);
-        btn_note->setWordWrap(true);
-        btn_note->setContentsMargins(24, 0, 0, 4);
-        btn_note->setStyleSheet(QStringLiteral("color: #9a9aa8; font-size: 11px;"));
-        v->addWidget(btn_note);
-
         v->addStretch(1);
         scroll->setWidget(content);
         outer->addWidget(scroll);
 
         apply_graphics_test = [cb_mip, cb_shadow, cb_poll, cb_jit, cb_occl, cb_tidy, cb_zstd,
-                               cb_vram_gc, combo_icons]() {
+                               cb_vram_gc]() {
             Settings::values.test_4k_mip_cap.SetValue(cb_mip->isChecked());
             Settings::values.test_shadow_size_steps.SetValue(cb_shadow->isChecked());
             Settings::values.test_poll_backoff.SetValue(cb_poll->isChecked());
@@ -206,7 +185,6 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
             Settings::values.test_tex_tidy_1s.SetValue(cb_tidy->isChecked());
             Settings::values.test_host_zstd.SetValue(cb_zstd->isChecked());
             Settings::values.test_vram_gc_4gb.SetValue(cb_vram_gc->isChecked());
-            Settings::values.oot_button_icons.SetValue(combo_icons->currentIndex());
         };
     }
     ui->tabWidget->addTab(graphics_test_tab.get(), tr("Test"));
