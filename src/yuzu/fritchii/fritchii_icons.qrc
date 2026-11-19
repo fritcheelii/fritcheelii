@@ -5,7 +5,7 @@
     <file>icons/restart.svg</file>
     <file>icons/stop.svg</file>
     <file>icons/fullscreen.svg</file>
-    <file>icons/exit-fullscreen.svg</file>
+    <file>icons/fullscreen-exit.svg</file>
     <file>icons/menu.svg</file>
   </qresource>
 </RCC>
