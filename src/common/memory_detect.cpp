@@ -26,6 +26,11 @@
 #include <string_view>
 #endif
 
+#include <atomic>
+#include <chrono>
+#include <new>
+
+#include "common/logging.h"
 #include "common/memory_detect.h"
 
 #ifdef __APPLE__
@@ -119,12 +124,10 @@ ProcessMemoryUsage GetProcessMemoryUsage() {
 
 std::optional<u64> GetSystemCommitRoom() {
 #ifdef _WIN32
-    PERFORMANCE_INFORMATION performance{};
-    performance.cb = sizeof(performance);
-    if (GetPerformanceInfo(&performance, sizeof(performance))) {
-        const u64 limit = performance.CommitLimit;
-        const u64 committed = performance.CommitTotal;
-        return (committed < limit ? limit - committed : 0) * performance.PageSize;
+    MEMORYSTATUSEX status{};
+    status.dwLength = sizeof(status);
+    if (GlobalMemoryStatusEx(&status)) {
+        return status.ullAvailPageFile;
     }
 #elif defined(__APPLE__)
     // macOS: memory it can hand out without swapping (free, inactive and purgeable pages). A
@@ -151,6 +154,94 @@ std::optional<u64> GetSystemCommitRoom() {
     }
 #endif
     return std::nullopt;
+}
+
+#ifdef _WIN32
+namespace {
+using CommitClock = std::chrono::steady_clock;
+constexpr std::chrono::seconds CommitWaitLimit{5};
+constexpr DWORD CommitRetryMs = 50;
+constexpr u64 NewHandlerCommitRoom = u64{4} << 30;
+
+bool IsOutOfCommit(DWORD error) {
+    return error == ERROR_COMMITMENT_LIMIT || error == ERROR_NOT_ENOUGH_MEMORY ||
+           error == ERROR_OUTOFMEMORY || error == ERROR_NO_SYSTEM_RESOURCES ||
+           error == ERROR_PAGEFILE_QUOTA;
+}
+
+void OnNewRefused() {
+    thread_local bool in_log = false;
+    thread_local CommitClock::time_point first{};
+    thread_local CommitClock::time_point last{};
+    static std::atomic<int> told{0};
+    const CommitClock::time_point now = CommitClock::now();
+    if (last == CommitClock::time_point{} || now - last > std::chrono::milliseconds{250}) {
+        first = now;
+    }
+    last = now;
+    const std::optional<u64> room = GetSystemCommitRoom();
+    if (!room || *room > NewHandlerCommitRoom) {
+        throw std::bad_alloc{};
+    }
+    if (now - first >= CommitWaitLimit) {
+        if (!in_log) {
+            in_log = true;
+            LOG_CRITICAL(Common_Memory,
+                         "Out of memory: C++ allocation refused for 5 s at Windows commit limit "
+                         "({} MiB left).",
+                         *room >> 20);
+            in_log = false;
+        }
+        throw std::bad_alloc{};
+    }
+    if (!in_log && told.fetch_add(1, std::memory_order_relaxed) < 8) {
+        in_log = true;
+        LOG_WARNING(Common_Memory,
+                    "C++ allocation refused at Windows commit limit ({} MiB left): retrying up to 5 s",
+                    *room >> 20);
+        in_log = false;
+    }
+    Sleep(CommitRetryMs);
+}
+} // Anonymous namespace
+
+bool CommitPagesWaiting(void* address, u64 bytes, bool quiet) {
+    if (VirtualAlloc(address, static_cast<SIZE_T>(bytes), MEM_COMMIT, PAGE_READWRITE) != nullptr)
+        [[likely]] {
+        return true;
+    }
+    DWORD error = GetLastError();
+    if (!IsOutOfCommit(error)) {
+        return false;
+    }
+    static std::atomic<int> told{0};
+    const bool tell = !quiet && told.fetch_add(1, std::memory_order_relaxed) < 8;
+    if (tell) {
+        LOG_WARNING(Common_Memory,
+                    "Committing {} KiB refused at Windows commit limit (error {}, {} MiB left): "
+                    "retrying up to 5 s",
+                    bytes >> 10, error, GetSystemCommitRoom().value_or(0) >> 20);
+    }
+    const CommitClock::time_point start = CommitClock::now();
+    while (CommitClock::now() - start < CommitWaitLimit) {
+        Sleep(CommitRetryMs);
+        if (VirtualAlloc(address, static_cast<SIZE_T>(bytes), MEM_COMMIT, PAGE_READWRITE) !=
+            nullptr) {
+            return true;
+        }
+        error = GetLastError();
+        if (!IsOutOfCommit(error)) {
+            break;
+        }
+    }
+    return false;
+}
+#endif
+
+void InstallCommitLimitNewHandler() {
+#ifdef _WIN32
+    std::set_new_handler(&OnNewRefused);
+#endif
 }
 
 } // namespace Common

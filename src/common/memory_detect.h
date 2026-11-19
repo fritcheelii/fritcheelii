@@ -36,4 +36,14 @@ struct ProcessMemoryUsage {
 /// MemAvailable. No value where it can't be read.
 [[nodiscard]] std::optional<u64> GetSystemCommitRoom();
 
+#ifdef _WIN32
+/// Commits reserved pages with VirtualAlloc(MEM_COMMIT), waiting up to 5 s in 50 ms steps if
+/// Windows momentarily hits its commit limit instead of crashing immediately.
+[[nodiscard]] bool CommitPagesWaiting(void* address, u64 bytes, bool quiet = false);
+#endif
+
+/// Installs a C++ new_handler (Windows) that waits and retries for up to 5 s when operator new
+/// fails near Windows' commit limit instead of throwing std::bad_alloc immediately.
+void InstallCommitLimitNewHandler();
+
 } // namespace Common

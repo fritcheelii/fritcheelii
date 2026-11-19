@@ -66,6 +66,7 @@
 #include "common/assert.h"
 #include "common/div_ceil.h"
 #include "common/free_region_manager.h"
+#include "common/memory_detect.h"
 #include "common/host_memory.h"
 #include "common/logging.h"
 
@@ -189,8 +190,7 @@ LONG CALLBACK ReservedPageHandler(PEXCEPTION_POINTERS info) {
     u8* const region_begin = static_cast<u8*>(region.BaseAddress);
     u8* const begin = (std::max)(granule, region_begin);
     u8* const end = (std::min)(granule + Granule, region_begin + region.RegionSize);
-    if (VirtualAlloc(begin, static_cast<size_t>(end - begin), MEM_COMMIT, PAGE_READWRITE) ==
-        nullptr) {
+    if (!Common::CommitPagesWaiting(begin, static_cast<u64>(end - begin), true)) {
         return EXCEPTION_CONTINUE_SEARCH;
     }
     if (g_net_commits.fetch_add(1, std::memory_order_relaxed) == 0) {
