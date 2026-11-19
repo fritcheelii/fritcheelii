@@ -86,6 +86,8 @@ void MainWindow::SetUpFritchiiUi() {
 #ifdef HAS_RESHADE
         .open_effects = [this] { OnPostProcessingShaders(); },
 #endif
+        .save_config = [this] { OnSaveConfig(); },
+        .restart_game = [this] { ui->action_Restart->trigger(); },
     };
     statusBar()->insertPermanentWidget(0, FritchiiUi::MakeGraphicsButton(this, graphics));
 

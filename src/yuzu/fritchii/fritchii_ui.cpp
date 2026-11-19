@@ -224,13 +224,12 @@ void RestructureMenus(Ui::MainWindow& ui, QMainWindow& window, const MenuHooks& 
     view->addSeparator();
     view->addAction(ui.action_Show_Performance_Overlay);
     view->addAction(ui.action_Show_Status_Bar);
-    view->addAction(ui.action_Show_Filter_Bar);
     view->addSeparator();
+    ui.menu_Game_List_Mode->clear();
+    ui.menu_Game_List_Mode->addAction(ui.action_Tree_View);
     ui.menu_Game_List_Mode->addSeparator();
     ui.menu_Game_List_Mode->addMenu(ui.menuGame_Icon_Size);
-    ui.menu_Game_List_Mode->addAction(ui.action_Show_Game_Name);
     view->addMenu(ui.menu_Game_List_Mode);
-    view->addMenu(ui.menu_Reset_Window_Size);
     view->addSeparator();
     view->addAction(ui.action_Post_Processing_Shaders);
     view->addMenu(ui.menu_View_Debugging);
@@ -260,8 +259,9 @@ void RestructureMenus(Ui::MainWindow& ui, QMainWindow& window, const MenuHooks& 
     tools->addMenu(advanced);
     ui.menubar->removeAction(ui.menu_Multiplayer->menuAction());
 
-    // Help: the log first; the original mods page leaves the menu.
+    // Help: the log first; remove upstream mods page and handbook.
     ui.menu_Help->removeAction(ui.action_Open_Mods_Page);
+    ui.menu_Help->removeAction(ui.action_Open_UserHandbook);
     QAction* first_help = ui.menu_Help->actions().value(0);
     if (hooks.export_log) {
         auto* export_log = new QAction(tr("&Export Log..."), &window);
@@ -321,7 +321,8 @@ void RestructureMenus(Ui::MainWindow& ui, QMainWindow& window, const MenuHooks& 
     Rename(ui.action_Load_Amiibo, tr("&Load or Remove Amiibo..."));
     Rename(ui.action_Firmware_From_Folder, tr("From &Folder..."));
     Rename(ui.action_Firmware_From_ZIP, tr("From &ZIP..."));
-    Rename(ui.action_About, tr("&About FritCheeLii v4.1"));
+    Rename(ui.action_Restore_Previous_Settings, tr("&Restore Default Settings"));
+    Rename(ui.action_About, tr("&About FritCheeLii v4.2"));
     Rename(ui.action_Eden_Dependencies, tr("&Open-Source Components"));
 }
 
@@ -357,10 +358,31 @@ QPushButton* MakeGraphicsButton(QWidget* parent, GraphicsHooks hooks) {
             {Settings::OotFsrPreset::UltraPerformance, QObject::tr("Ultra Performance (33%)")},
         };
         add_choices(
-            QObject::tr("OoT &FSR Preset"), oot_fsr_choices,
+            QObject::tr("OoT &FSR Preset (Restart)"), oot_fsr_choices,
             Settings::values.oot_fsr_preset.GetValue(),
-            [](Settings::OotFsrPreset preset) {
+            [button, hooks](Settings::OotFsrPreset preset) {
+                if (Settings::values.oot_fsr_preset.GetValue() == preset) {
+                    return;
+                }
                 Settings::values.oot_fsr_preset.SetValue(preset);
+                if (hooks.save_config) {
+                    hooks.save_config();
+                }
+                if (QtCommon::system && QtCommon::system->IsPoweredOn() && hooks.restart_game) {
+                    QMessageBox box(
+                        QMessageBox::Question, QObject::tr("Restart Required"),
+                        QObject::tr("OoT FSR Preset requires restarting the game to take effect."),
+                        QMessageBox::NoButton, button->window());
+                    box.setInformativeText(
+                        QObject::tr("Your new preset has been saved. Restart the game now?"));
+                    QPushButton* const restart_btn =
+                        box.addButton(QObject::tr("Restart Now"), QMessageBox::AcceptRole);
+                    box.setDefaultButton(box.addButton(QObject::tr("Later"), QMessageBox::RejectRole));
+                    box.exec();
+                    if (box.clickedButton() == restart_btn) {
+                        hooks.restart_game();
+                    }
+                }
             },
             true);
 

@@ -1860,7 +1860,7 @@ void MainWindow::FillCustomizeMenu(QMenu* menu) {
         const char* key;
     };
     for (const ThemeChoice& choice : {
-             ThemeChoice{tr("CheezyEmu"), "cheezy"},
+             ThemeChoice{tr("FritCheeLii"), "cheezy"},
              ThemeChoice{tr("Classic (Dark Colorful, the old look)"), "colorful_dark"},
              ThemeChoice{tr("Classic Midnight Blue"), "colorful_midnight_blue"},
              ThemeChoice{tr("System (follows your desktop)"), "default"},
@@ -1886,7 +1886,7 @@ void MainWindow::FillCustomizeMenu(QMenu* menu) {
         QMenu* const sub = menu->addMenu(title);
         sub->setEnabled(cheezy);
         if (!cheezy) {
-            sub->setToolTip(tr("For the CheezyEmu theme"));
+            sub->setToolTip(tr("For the FritCheeLii theme"));
         }
         const QColor current = setting.GetValue().empty()
                                    ? theme_default
@@ -2137,8 +2137,7 @@ void MainWindow::ConnectMenuEvents() {
     connect(ui->menu_Help, &QMenu::aboutToShow, this, [this] {
         ui->action_Apply_Recommended_Settings->setEnabled(!emulation_running);
         ui->action_Restore_Previous_Settings->setEnabled(!emulation_running);
-        ui->action_Restore_Previous_Settings->setVisible(
-            !Settings::values.recommended_settings_backup.GetValue().empty());
+        ui->action_Restore_Previous_Settings->setVisible(true);
     });
     connect_menu(ui->action_Data_Manager, &MainWindow::OnDataDialog);
 
@@ -2401,7 +2400,7 @@ bool MainWindow::LoadROM(const QString& filename, Service::AM::FrontendAppletPar
         case Core::SystemResultStatus::ErrorMemoryAllocation:
             QMessageBox::critical(
                 this, tr("Not enough memory to start the game"),
-                tr("CheezyEmu could not allocate the game's memory. Close other applications and "
+                tr("FritCheeLii could not allocate the game's memory. Close other applications and "
                    "check that your system has enough available memory and paging-file space, "
                    "then try again."));
             break;
@@ -2512,7 +2511,7 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
     if (close_pending) {
         return;
     }
-    LOG_INFO(Frontend, "CheezyEmu starting...");
+    LOG_INFO(Frontend, "FritCheeLii starting...");
     report_session.reset();
     game_list->SetReportableProgramId(0);
 
@@ -2557,7 +2556,7 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
                    "Vulkan, 1x resolution, GPU Fast, asynchronous shaders, BC3, conservative VRAM, "
                    "reactive flushing off, FIFO Relaxed VSync, handheld mode, ScaleForce, and "
                    "FXAA.\n\n"
-                   "They apply to Mario Kart World until CheezyEmu is closed. Your saved settings "
+                   "They apply to Mario Kart World until FritCheeLii is closed. Your saved settings "
                    "are not changed."),
                 QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes;
         LOG_INFO(Config, "MKW recommended settings accepted: {}", use_recommended_mkw_settings);
@@ -2668,7 +2667,7 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
         }
         session.mods = CompatibilityReporting::SummarizeEnabledAddons(mods);
         session.updates = CompatibilityReporting::SummarizeEnabledAddons(updates);
-        session.build = QStringLiteral("CheezyEmu %1 (%2)")
+        session.build = QStringLiteral("FritCheeLii %1 (%2)")
                             .arg(QString::fromUtf8(Common::g_build_version),
                                  QString::fromUtf8(Common::g_scm_rev).left(12));
 #ifdef ARCHITECTURE_x86_64
@@ -2977,9 +2976,9 @@ void MainWindow::ShowWhatsNew() {
         return;
     }
     QDialog dialog(this);
-    dialog.setWindowTitle(tr("What's new in CheezyEmu %1").arg(number));
+    dialog.setWindowTitle(tr("What's new in FritCheeLii %1").arg(number));
     auto* layout = new QVBoxLayout(&dialog);
-    auto* header = new QLabel(tr("<b>CheezyEmu was updated to build %1.</b> Here's what changed:")
+    auto* header = new QLabel(tr("<b>FritCheeLii was updated to build %1.</b> Here's what changed:")
                                   .arg(number),
                               &dialog);
     auto* notes = new QTextBrowser(&dialog);
@@ -3004,13 +3003,13 @@ void MainWindow::TerminateEmulationThread() {
     // also still holds the game's memory, so CheezyEmu restarts (or, when quitting, just exits)
     // and Windows frees everything.
     LOG_ERROR(Frontend, "Emulation thread failed to stop (the last \"Shutdown:\" line above is "
-                        "the step it was stuck in); {} CheezyEmu",
+                        "the step it was stuck in); {} FritCheeLii",
               close_pending ? "exiting" : "restarting");
     Common::Log::Stop();
     UISettings::SaveWindowState();
     if (!close_pending) {
-        QMessageBox::warning(this, tr("CheezyEmu"),
-                             tr("The game got stuck while closing, so CheezyEmu will restart to "
+        QMessageBox::warning(this, tr("FritCheeLii"),
+                             tr("The game got stuck while closing, so FritCheeLii will restart to "
                                 "free the memory it was using.\n\nIf this keeps happening, "
                                 "please share eden_log.txt (it says where the game got stuck)."));
         QProcess::startDetached(QCoreApplication::applicationFilePath(), {});
@@ -4309,6 +4308,9 @@ void MainWindow::ResetWindowSize1080() {
 }
 
 void MainWindow::SetGameListMode(Settings::GameListMode mode) {
+    if (FritchiiUi::Enabled()) {
+        mode = Settings::GameListMode::TreeView;
+    }
     ui->action_Grid_View->setChecked(mode == Settings::GameListMode::GridView);
     ui->action_Tree_View->setChecked(mode == Settings::GameListMode::TreeView);
     ui->action_Carousel_View->setChecked(mode == Settings::GameListMode::CarouselView);
@@ -4998,9 +5000,36 @@ void MainWindow::OnRestorePreviousSettings() {
     if (emulation_running) {
         return;
     }
-    const auto changes = Settings::RestorePreviousSettings(Settings::values);
-    LOG_INFO(Config, "Restored the settings from before the recommended ones: {} changed",
-             changes.size());
+    const auto answer = QMessageBox::question(
+        this, tr("Restore Default Settings"),
+        tr("Restore FritCheeLii's optimized default settings?\n\n"
+           "This resets graphics & performance options to the default balanced profile "
+           "(Handheld, 1X, Balanced FSR, No sharpening, Low GPU accuracy, Conservative VRAM, "
+           "BC3 ASTC, Async Shaders) and turns off experimental Test switches."),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (answer != QMessageBox::Yes) {
+        return;
+    }
+    constexpr u64 GiB = u64{1} << 30;
+    const Settings::HostProfile default_profile{
+        .ram_bytes = 16 * GiB,
+        .vram_bytes = 4 * GiB,
+        .amd = false,
+        .integrated = false,
+        .windows = true,
+    };
+    const auto changes = Settings::ApplyRecommendedSettings(Settings::values, default_profile);
+    Settings::values.use_docked_mode.SetValue(Settings::ConsoleMode::Handheld);
+    Settings::values.oot_30fps.SetValue(false);
+    Settings::values.test_4k_mip_cap.SetValue(false);
+    Settings::values.test_shadow_size_steps.SetValue(false);
+    Settings::values.test_poll_backoff.SetValue(false);
+    Settings::values.test_occlusion_off.SetValue(false);
+    Settings::values.test_tex_tidy_1s.SetValue(false);
+    Settings::values.test_jit_block_warmup.SetValue(false);
+    Settings::values.test_host_zstd.SetValue(false);
+    Settings::values.test_vram_gc_4gb.SetValue(false);
+    LOG_INFO(Config, "Restored FritCheeLii default settings: {} changed", changes.size());
     Settings::UpdateGPUAccuracy();
     OnSaveConfig();
     UpdateStatusButtons();
@@ -5666,7 +5695,7 @@ void MainWindow::OnCaptureGlitch() {
     // What was set and shown at the time.
     {
         std::ofstream info{folder / "info.txt"};
-        info << "CheezyEmu " << Common::g_build_fullname << '\n'
+        info << "FritCheeLii " << Common::g_build_fullname << '\n'
              << "Title " << fmt::format("{:016X}", QtCommon::system->GetApplicationProcessProgramID())
              << '\n'
              << game_fps_label->text().toStdString() << " | "
@@ -5725,7 +5754,7 @@ void MainWindow::OnEmulatorUpdateAvailable() {
     const auto result = update_future.result();
     if (result.failure == UpdateChecker::Failure::RateLimited) {
         statusBar()->showMessage(
-            tr("Could not check for updates: GitHub rate limit reached. CheezyEmu will try again at "
+            tr("Could not check for updates: GitHub rate limit reached. FritCheeLii will try again at "
                "the next start."),
             15000);
         return;
@@ -5806,7 +5835,7 @@ void MainWindow::UpdateWindowTitle(std::string_view title_name, std::string_view
                                    std::string_view gpu_vendor) {
     static const std::string build_id = std::string{Common::g_build_id};
     static const std::string yuzu_title =
-        fmt::format("FritCheeLii | v4.1 | {}", std::string{Common::g_compiler_id});
+        fmt::format("FritCheeLii | v4.2 | {}", std::string{Common::g_compiler_id});
 
     const auto override_title =
         fmt::format(fmt::runtime(std::string(Common::g_title_bar_format_idle)), build_id);
@@ -6356,7 +6385,7 @@ void MainWindow::OnCheckGraphicsBackend() {
         UISettings::values.gui_force_x11.SetValue(true);
         GraphicsBackend::SetForceX11(true);
         QMessageBox::information(this, tr("Restart Required"),
-                                 tr("Restart CheezyEmu to apply the X11 backend."));
+                                 tr("Restart FritCheeLii to apply the X11 backend."));
     }
 }
 #endif
@@ -6475,8 +6504,8 @@ bool MainWindow::ConfirmClose() {
         UISettings::values.confirm_before_stopping.GetValue() == ConfirmStop::Ask_Based_On_Game)
         return true;
 
-    const auto text = tr("Are you sure you want to close CheezyEmu?");
-    return question(this, tr("CheezyEmu"), text);
+    const auto text = tr("Are you sure you want to close FritCheeLii?");
+    return question(this, tr("FritCheeLii"), text);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
@@ -6582,7 +6611,7 @@ bool MainWindow::ConfirmChangeGame() {
 
     // Use custom question to link controller navigation
     return question(
-        this, tr("CheezyEmu"),
+        this, tr("FritCheeLii"),
         tr("Are you sure you want to stop the emulation? Any unsaved progress will be lost."),
         QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
 }
@@ -6591,10 +6620,10 @@ bool MainWindow::ConfirmForceLockedExit() {
     if (QtCommon::emu_thread == nullptr)
         return true;
 
-    const auto text = tr("The currently running application has requested CheezyEmu to not exit.\n\n"
+    const auto text = tr("The currently running application has requested FritCheeLii to not exit.\n\n"
                          "Would you like to bypass this and exit anyway?");
 
-    return question(this, tr("CheezyEmu"), text);
+    return question(this, tr("FritCheeLii"), text);
 }
 
 void MainWindow::RequestGameExit() {

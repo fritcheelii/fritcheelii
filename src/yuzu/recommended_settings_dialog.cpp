@@ -89,11 +89,11 @@ bool RecommendedSettingsDialog::Ask(QWidget* parent, const QString& host_text) {
     QMessageBox box(parent);
     box.setIcon(QMessageBox::Question);
     box.setWindowTitle(tr("Best settings for this PC"));
-    box.setText(tr("Use the settings CheezyEmu recommends for this PC?"));
+    box.setText(tr("Use the settings FritCheeLii recommends for this PC?"));
     box.setInformativeText(
         tr("%1\n\nThey set performance options, AMD FSR, frame generation and Ocarina of Time's "
-           "render size to what fits this graphics card and memory. CheezyEmu keeps your own "
-           "settings, so you can go back at any time with Help > Restore My Previous Settings. "
+           "render size to what fits this graphics card and memory. You can return to the "
+           "optimized default profile at any time with Help > Restore Default Settings. "
            "Settings you made for a single game (right-click a game > Configure Game) do not "
            "change and still win over these.")
             .arg(host_text));
@@ -117,21 +117,22 @@ void RecommendedSettingsDialog::ShowApplied(
             tr("Your settings already match the recommended settings. Nothing changed."));
         return;
     }
-    ShowChanges(parent, tr("Recommended settings"), tr("CheezyEmu now uses the recommended settings."),
+    ShowChanges(parent, tr("Recommended settings"), tr("FritCheeLii now uses the recommended settings."),
                 Describe(parent, changes, tr("On"), tr("Off")),
-                tr("To go back, use Help > Restore My Previous Settings."));
+                tr("To return to the optimized defaults, use Help > Restore Default Settings."));
 }
 
 void RecommendedSettingsDialog::ShowRestored(
     QWidget* parent, const std::vector<Settings::RecommendedSettingChange>& changes) {
     if (changes.empty()) {
         QMessageBox::information(
-            parent, tr("Previous settings"),
-            tr("Your settings already match your previous settings. Nothing changed."));
+            parent, tr("Default settings"),
+            tr("Your settings already match FritCheeLii's default settings."));
         return;
     }
-    ShowChanges(parent, tr("Previous settings"), tr("CheezyEmu uses your previous settings again."),
+    ShowChanges(parent, tr("Default settings"),
+                tr("FritCheeLii has restored the optimized default settings."),
                 Describe(parent, changes, tr("On"), tr("Off")),
-                tr("To use the recommended settings again, use Help > Apply Recommended "
-                   "Settings."));
+                tr("To auto-detect settings for your hardware again, use Help > Find Best "
+                   "Settings for This PC..."));
 }

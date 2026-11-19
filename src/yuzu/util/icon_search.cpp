@@ -217,7 +217,7 @@ HttpResult HttpGet(const std::string& full_url, std::chrono::steady_clock::time_
 #ifdef YUZU_BUNDLED_OPENSSL
         client.load_ca_cert_store(kCert, sizeof(kCert));
 #endif
-        httplib::Headers headers{{"User-Agent", "CheezyEmu"}};
+        httplib::Headers headers{{"User-Agent", "FritCheeLii"}};
         if (!bearer_token.empty()) {
             headers.emplace("Authorization", "Bearer " + bearer_token);
         }
@@ -749,7 +749,7 @@ int IconSearch::ChooseIcon(const std::vector<std::vector<u8>>& choices) {
 }
 
 bool IconSearch::AskForApiKey(bool missing) {
-    QString text = missing ? tr("CheezyEmu finds game pictures on SteamGridDB, which needs a "
+    QString text = missing ? tr("FritCheeLii finds game pictures on SteamGridDB, which needs a "
                                 "free API key. With a key, pictures for your games also appear "
                                 "on their own.")
                            : tr("SteamGridDB rejected the saved API key.");

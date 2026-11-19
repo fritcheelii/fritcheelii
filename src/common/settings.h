@@ -447,11 +447,11 @@ struct Values {
                                                   true};
     // The Legend of Zelda: Ocarina of Time's own anti-aliasing network and its sharpening output
     // pass, or the tonemapped image as the game renders it (video_core/oot_network.h).
-    SwitchableSetting<OotAntiAliasing> oot_anti_aliasing{linkage, OotAntiAliasing::Game,
+    SwitchableSetting<OotAntiAliasing> oot_anti_aliasing{linkage, OotAntiAliasing::NoSharpening,
                                                          "oot_anti_aliasing", Category::Renderer};
     // Ocarina of Time: the game renders its 3D scene at a fixed fraction of its own size (its
     // dynamic resolution path, patched at load) and FSR upscales it. Native leaves it alone.
-    SwitchableSetting<OotFsrPreset> oot_fsr_preset{linkage, OotFsrPreset::Native, "oot_fsr_preset",
+    SwitchableSetting<OotFsrPreset> oot_fsr_preset{linkage, OotFsrPreset::Balanced, "oot_fsr_preset",
                                                    Category::Renderer};
     Setting<bool> test_4k_mip_cap{linkage, false, "test_4k_mip_cap", Category::Miscellaneous};
     Setting<bool> test_shadow_size_steps{linkage, false, "test_shadow_size_steps",
@@ -468,7 +468,7 @@ struct Values {
     Setting<int> oot_button_icons{linkage, 0, "oot_button_icons", Category::Miscellaneous};
     // Ocarina of Time docked: FSR writes 4K (the default), or 1440p, the game's own docked image,
     // which costs less. FSR presets size the scene against that output.
-    SwitchableSetting<OotDockedOutput> oot_docked_output{linkage, OotDockedOutput::Output4k,
+    SwitchableSetting<OotDockedOutput> oot_docked_output{linkage, OotDockedOutput::Output1440p,
                                                          "oot_docked_output", Category::Renderer};
 
     SwitchableSetting<std::string> post_shader_chain{linkage,
@@ -599,18 +599,14 @@ struct Values {
                                          linkage, 0, "bg_blue", Category::Renderer, Specialization::Default, true, true};
 
     SwitchableSetting<GpuAccuracy, true> gpu_accuracy{linkage,
-#ifdef __ANDROID__
                                                       GpuAccuracy::Low,
-#else
-                                                      GpuAccuracy::High,
-#endif
                                                       "gpu_accuracy",
                                                       Category::RendererAdvanced,
                                                       Specialization::Default,
                                                       true,
                                                       true};
 
-    GpuAccuracy current_gpu_accuracy{GpuAccuracy::High};
+    GpuAccuracy current_gpu_accuracy{GpuAccuracy::Low};
 
     SwitchableSetting<DmaAccuracy, true> dma_accuracy{linkage,
                                                       DmaAccuracy::Default,
@@ -649,7 +645,7 @@ struct Values {
                                                            "vram_usage_mode",
                                                            Category::RendererAdvanced};
 
-    SwitchableSetting<NvdecEmulation> nvdec_emulation{linkage, NvdecEmulation::Cpu,
+    SwitchableSetting<NvdecEmulation> nvdec_emulation{linkage, NvdecEmulation::Gpu,
                                                       "nvdec_emulation", Category::RendererAdvanced};
 
     SwitchableSetting<AnisotropyMode, true> max_anisotropy{linkage,
@@ -815,7 +811,7 @@ struct Values {
     SwitchableSetting<bool> emulate_bgr565{linkage, false, "emulate_bgr565",
                                             Category::RendererHacks};
 
-    SwitchableSetting<bool> use_asynchronous_shaders{linkage, false, "use_asynchronous_shaders",
+    SwitchableSetting<bool> use_asynchronous_shaders{linkage, true, "use_asynchronous_shaders",
                                                      Category::RendererHacks};
 
     SwitchableSetting<GpuUnswizzleSize> gpu_unswizzle_texture_size{linkage,

@@ -181,67 +181,29 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
     INSERT(Settings, scaling_filter, tr("Window Adapting Filter:"),
            tr("Bilinear while HDR output is active."));
     INSERT(Settings, game_dlss_network, tr("Use the game's own DLSS"),
-           tr("Runs a Switch 2 game's own DLSS (its upscaling network, translated for this GPU) "
-              "instead of AMD FSR 3.1 in its place.\nAMD FSR 3.1 still draws while the network is "
-              "checked, when it can't run on this GPU, with resolution scaling, and for the rest "
-              "of the session if its output fails CheezyEmu's checks.\nTakes effect when a game "
-              "starts."));
+           tr("Uses the Switch 2 game's built-in upscaler instead of AMD FSR 3.1.\n"
+              "Keep OFF for best performance on GTX / AMD cards. Requires game restart."));
     INSERT(Settings, frame_rate_limit, tr("Frame rate limit (Switch 2):"),
-           tr("Rate of the Switch 2 VSync event that games start their frames on (default 60 Hz)."
-              "\nAbove 60 Hz most games run too fast; use it with a game patch that follows real "
-              "time, such as \"FPS Unlock (built-in)\" for Ocarina of Time.\nTakes effect when a "
-              "game starts."));
+           tr("Switch 2 VSync target (default 60 Hz). Requires game restart."));
     INSERT(Settings, fsr_sharpening_slider, tr("RCAS Sharpness:"),
-           tr("Strength of RCAS (AMD's contrast-adaptive sharpening) on the upscaler used in place "
-              "of a game's DLSS (AMD FSR 3.1); 0% turns it off.\nAlso sets the sharpening "
-              "of the AMD FSR 1 and SGSR window adapting filters."));
+           tr("Sharpening strength for AMD FSR upscaling (0% = off)."));
     INSERT(Settings, amd_fsr4, tr("Use AMD FSR 4 in place of a game's DLSS"),
-           tr("Uses AMD FSR 4 (machine-learning upscaling) in place of a Switch 2 game's own DLSS, "
-              "instead of FSR 3.1, on GPUs AMD's FSR runtime supports: Radeon RX 9000, and RX 7000 "
-              "and RX 6000 with a recent driver. Other GPUs keep FSR 3.1.\nIn Ocarina of Time, AMD "
-              "frame generation uses AMD's FSR 3.1 when FSR 4 is off or not offered, so it works on "
-              "any GPU.\nNeeds Resolution 1X: at other resolutions the game's own upscaler is used."
-              "\nWindows only. NVIDIA DLSS, when it is on and available, is used first."
-              "\nTakes effect when the game starts."));
+           tr("Enables AMD FSR 4 upscaling on supported Radeon RX 6000/7000/9000 GPUs (Windows, 1X).\n"
+              "Keep OFF on 4 GB / GTX cards. Requires game restart."));
     INSERT(Settings, nvidia_dlss, tr("Use NVIDIA DLSS in place of a game's DLSS (experimental)"),
-           tr("Uses NVIDIA DLSS on GeForce RTX cards in place of a Switch 2 game's own DLSS, "
-              "instead of AMD FSR 3.1.\nNeeds NVIDIA's Streamline loader, and NVIDIA DLSS unless "
-              "the NVIDIA app has downloaded it; CheezyEmu does not ship NVIDIA's files. Use the "
-              "download button below.\nFire Emblem: Fortune's Weave also needs "
-              "EDEN_NX2_DLSS_REPLACEMENT=dlss. Without that override, its spatial workaround "
-              "remains active.\nIn The Legend of Zelda: Ocarina of Time it replaces the game's "
-              "upscaler at 1x resolution scale.\nTakes effect when a game starts."));
+           tr("Uses NVIDIA DLSS on GeForce RTX cards instead of AMD FSR (1X, requires RTX GPU).\n"
+              "Keep OFF on GTX / AMD cards. Requires game restart."));
     INSERT(Settings, anti_aliasing, tr("Anti-Aliasing Method:"),
-           tr("The anti-aliasing method to use.\nSMAA offers the best quality.\nFXAA "
-              "can produce a more stable picture in lower resolutions.\nOff while HDR output "
-              "is active."));
+           tr("Post-process anti-aliasing. None is fastest; SMAA is sharpest; FXAA is light."));
     INSERT(Settings, oot_anti_aliasing, tr("Ocarina of Time anti-aliasing:"),
-           tr("The Legend of Zelda: Ocarina of Time only.\nGame: the game's own anti-aliasing "
-              "network, which sharpens heavily.\nNo sharpening: the image as the game renders it, "
-              "without the network (faster; pairs well with a higher resolution). Has no effect while "
-              "NVIDIA DLSS is on.\nTakes effect when the game starts."));
+           tr("No sharpening (Recommended): cleaner and faster.\n"
+              "Game: uses the game's heavy sharpening pass. Requires game restart."));
     INSERT(Settings, oot_fsr_preset, tr("Ocarina of Time FSR preset:"),
-           tr("The Legend of Zelda: Ocarina of Time renders its 3D scene smaller and AMD FSR "
-              "upscales it (at 1080p):\n"
-              "Native AA: the full 1920x1080, FSR as anti-aliasing (sharpest, slowest).\n"
-              "Native: the game's own size, 1440x810.\n"
-              "Quality: 1280x720.\nBalanced: 1125x633.\nPerformance: 960x540.\n"
-              "Ultra Performance: 640x360 (fastest, softest).\n"
-              "Docked, the preset follows the docked output. 4K: Quality 2560x1440, Balanced "
-              "2250x1265, Performance 1920x1080, Ultra Performance 1280x720 (Native AA is "
-              "2560x1440 too, the largest the game draws docked). 1440p: Native AA 2560x1440, "
-              "Quality 1710x961, Balanced 1500x844, Performance 1280x720, Ultra Performance "
-              "855x480.\n"
-              "The HUD and text stay sharp, and saved shaders still apply. Turns on Max "
-              "Resolution's fixed size. Takes effect when the game starts."));
+           tr("3D render scale for Ocarina of Time (HUD stays sharp). Requires game restart.\n"
+              "Balanced (59%): best for 4 GB GPUs | Quality (67%): 8 GB | Native AA: 12 GB+."));
     INSERT(Settings, oot_docked_output, tr("Ocarina of Time docked output:"),
-           tr("Docked only. 4K: FSR upscales the 3D scene to 3840x2160 (sharpest, heaviest).\n"
-              "1440p: FSR writes the game's own 2560x1440 image instead and no 4K image is made, "
-              "which is lighter on the GPU. The FSR preset renders a fraction of the output you "
-              "pick here, so 4K renders more for the same preset (Performance: 1920x1080 for 4K, "
-              "1280x720 for 1440p).\nApplies with an FSR preset, or Native with the Max Resolution "
-              "add-on: Native without it keeps the game's own 1080p scene and 1440p image.\nTakes "
-              "effect when the game starts."));
+           tr("Docked mode only. 1440p (lighter): recommended for 4–8 GB GPUs.\n"
+              "4K: sharpest, recommended only for 12 GB+ GPUs. Requires game restart."));
     INSERT(Settings, post_shader_chain, QString(), QString());
     INSERT(Settings, post_shader_preset, QString(), QString());
     INSERT(Settings, post_shader_enabled, tr("Enable post-processing effects"),
@@ -302,20 +264,12 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
     INSERT(Settings, frame_gen, tr("Enable Frame Generation"),
            tr("Paused while HDR output is active."));
     INSERT(Settings, frame_gen_type, tr("Frame Generation Type"),
-           tr("AMD FSR Frame Generation: AMD's frame generation for Ocarina of Time (Windows, "
-              "Resolution 1X; restart CheezyEmu after picking it).\nOptical Flow Interpolation and "
-              "Lossless Scaling are CheezyEmu's other frame generators, for any game."));
+           tr("AMD FSR Frame Generation doubles FPS in OoT (needs 1X + restart; uses ~1.5 GB RAM)."));
     INSERT(Settings, amd_frame_gen_version, tr("AMD Frame Generation Version"),
-           tr("Which AMD FSR frame generation runs (with the AMD FSR frame generation type).\n"
-              "Auto: FSR 4 frame generation on Radeon RX 9000 (it needs their FP8 support), "
-              "FSR 3.1 on every other GPU.\n"
-              "FSR 3.1: lighter on the GPU; use it on an RX 9000 if FSR 4 frame generation costs "
-              "too much performance.\nTakes effect when CheezyEmu restarts."));
+           tr("Auto picks FSR 4 on RX 9000 and FSR 3.1 on all other GPUs. Requires restart."));
     INSERT(Settings, frame_gen_multiplier, tr("Frame Generation Multiplier"), QString());
     INSERT(Settings, frame_gen_target_rate, tr("Target Frame Rate"),
-           tr("CheezyEmu's own frame generators (Optical Flow, Lossless Scaling) add frames up to this "
-              "rate.\nAMD FSR frame generation always doubles the game's frame rate: for a steady "
-              "60 on screen, turn the \"FPS Unlock (built-in)\" add-on off so the game runs at 30."));
+           tr("Target FPS for frame generation. AMD FSR always doubles the game's frame rate."));
     INSERT(Settings, frame_gen_flow_scale_auto, tr("Auto Flow Scale"), QString());
     INSERT(Settings, frame_gen_flow_scale, tr("Flow Scale"), QString());
     INSERT(Settings, frame_gen_queue_target, tr("Queue Target"), QString());
@@ -427,6 +381,9 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
            tr("Lets the game adjust between 30 and 60 FPS using whole-frame timing to maintain "
               "normal game speed. Takes effect after restarting the game and takes precedence over "
               "the 30 FPS mode."));
+    INSERT(Settings, oot_30fps, tr("Ocarina of Time: 30 FPS mode (lower-end PCs)"),
+           tr("Caps Ocarina of Time to 30 FPS at full speed (same as the 60/30 FPS button on the "
+              "status bar). Takes effect live."));
     INSERT(Settings, barrier_feedback_loops, tr("Barrier feedback loops"),
            tr("Improves rendering of transparency effects in specific games."));
     INSERT(Settings, enable_buffer_history, tr("Enable buffer history"),

@@ -398,9 +398,7 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
             fsr_fg_box = new QGroupBox(tr("AMD FSR && Frame Generation"), this);
             auto* box_layout = new QVBoxLayout(fsr_fg_box);
             auto* hint = new QLabel(
-                tr("Ocarina of Time: FSR upscales the game and AMD frame generation adds frames. "
-                   "Both need Resolution 1X. Pick \"AMD FSR Frame Generation\" as the type and "
-                   "restart CheezyEmu after changing it."),
+                tr("Ocarina of Time: FSR upscales the 3D scene (requires Resolution 1X and game restart)."),
                 fsr_fg_box);
             hint->setWordWrap(true);
             box_layout->addWidget(hint);

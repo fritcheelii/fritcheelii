@@ -52,6 +52,8 @@ struct GraphicsHooks {
     std::function<bool()> renderer_locked;  ///< the renderer can't change while a game runs
     std::function<void()> open_settings;
     std::function<void()> open_effects;     ///< empty without ReShade-style effects
+    std::function<void()> save_config;      ///< persist settings immediately
+    std::function<void()> restart_game;     ///< restart running game when a restart-only preset changes
 };
 /// The status bar's one "Graphics" button: renderer, accuracy, filter, anti-aliasing, effects.
 [[nodiscard]] QPushButton* MakeGraphicsButton(QWidget* parent, GraphicsHooks hooks);

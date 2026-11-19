@@ -193,7 +193,7 @@ Nx2SwitchesDialog::Nx2SwitchesDialog(QWidget* parent) : QDialog(parent) {
     auto* layout = new QVBoxLayout(this);
     auto* intro = new QLabel(
         Tr("Advanced switches for Switch 2 games (the ones in nx2_switches.txt). Saved to "
-           "your own nx2_switches.txt:\n%1\nRestart CheezyEmu after changing them.")
+           "your own nx2_switches.txt:\n%1\nRestart FritCheeLii after changing them.")
             .arg(QString::fromStdWString(UserSwitchFile().wstring())),
         this);
     intro->setWordWrap(true);
@@ -259,7 +259,7 @@ void Nx2SwitchesDialog::Save() {
         }
     }
     if (kept.empty()) {
-        kept.push_back("# Your CheezyEmu switches: NAME=VALUE lines, read when CheezyEmu starts.");
+        kept.push_back("# Your FritCheeLii switches: NAME=VALUE lines, read when FritCheeLii starts.");
         kept.push_back("# Tools > Switch 2 Switches edits the ones it lists.");
     }
     while (!kept.empty() && Trim(kept.back()).empty()) {
@@ -294,6 +294,6 @@ void Nx2SwitchesDialog::Save() {
         return;
     }
     QMessageBox::information(this, Tr("Switch 2 Switches"),
-                             Tr("Saved. Restart CheezyEmu for the changes to take effect."));
+                             Tr("Saved. Restart FritCheeLii for the changes to take effect."));
     accept();
 }

@@ -32,7 +32,8 @@ void ForEachRecommendedSetting(Values& config, const HostProfile& host, Func&& f
         func(setting, value);
     };
     constexpr u64 GiB = u64{1} << 30;
-    // A "12 GB" card reports a little under 12 GiB, an "8 GB" one a little under 8.
+    // A "16 GB" card reports ~15+ GiB, "12 GB" ~11+ GiB, "8 GB" ~7+ GiB.
+    const bool ultra_card = !host.integrated && host.vram_bytes >= 15 * GiB;
     const bool large_card = !host.integrated && host.vram_bytes >= 11 * GiB;
     const bool medium_card = !host.integrated && host.vram_bytes >= 7 * GiB;
 
@@ -64,7 +65,7 @@ void ForEachRecommendedSetting(Values& config, const HostProfile& host, Func&& f
     entry(config.use_video_framerate, false);
     entry(config.mkw_30fps, false);
     entry(config.mkw_dynamic_fps, false);
-    entry(config.use_reactive_flushing, true);
+    entry(config.use_reactive_flushing, false);
     entry(config.barrier_feedback_loops, true);
     entry(config.enable_buffer_history, false);
 
@@ -101,9 +102,15 @@ void ForEachRecommendedSetting(Values& config, const HostProfile& host, Func&& f
     entry(config.cpu_accuracy, CpuAccuracy::Auto);
     entry(config.use_custom_cpu_ticks, false);
 
+    // Graphics base defaults (optimized balance of performance & image quality)
+    entry(config.resolution_setup, ResolutionSetup::Res1X);
+    entry(config.vsync_mode, VSyncMode::Mailbox);
+    entry(config.async_presentation, true);
+    entry(config.oot_anti_aliasing, OotAntiAliasing::NoSharpening);
+
     // What depends on the PC: AMD FSR, frame generation and Ocarina of Time's render size.
-    // FSR runs on any GPU on Windows (FSR 4 where AMD offers it, FSR 3.1 otherwise).
-    entry(config.amd_fsr4, host.windows);
+    // AMD FSR 4 only runs on supported AMD GPUs (keep OFF on NVIDIA and <7 GB cards).
+    entry(config.amd_fsr4, host.windows && host.amd && (large_card || medium_card));
     // AMD frame generation keeps about 1.5 GB of RAM for itself: a PC with 16 GB runs out with
     // it (build 11 reports of error 1455 and whole-PC freezes), and it needs a card that holds
     // the game's frame rate.
@@ -112,14 +119,17 @@ void ForEachRecommendedSetting(Values& config, const HostProfile& host, Func&& f
     entry(config.frame_gen, frame_generation);
     entry(config.frame_gen_type,
           host.windows && host.amd ? FrameGenType::AmdFsr : config.frame_gen_type.GetValue(true));
-    // The scene's render size: full on a 12 GB card, lower where video memory or the GPU is
-    // short. (On a PC limited by its CPU a lower preset doesn't add frames.)
-    entry(config.oot_fsr_preset, large_card    ? OotFsrPreset::NativeAa
+    // 3 real-world FPS-oriented tiers:
+    //  - Entry (<7 GB VRAM, e.g. GTX 1650 4 GB): Balanced (59%) + 1440p docked
+    //  - Mid   (8-10 GB VRAM, e.g. RTX 3060/4060, RX 6600/7600): Quality (67%) + 1440p docked
+    //  - High  (12 GB+ VRAM): Native (100% game scale) on 12 GB, Native AA + 4K docked on 16 GB+
+    entry(config.oot_fsr_preset, ultra_card    ? OotFsrPreset::NativeAa
+                                 : large_card  ? OotFsrPreset::Native
                                  : medium_card ? OotFsrPreset::Quality
-                                               : OotFsrPreset::Performance);
-    // Docked output: 4K needs the video memory for 4K images.
+                                               : OotFsrPreset::Balanced);
+    // Docked output: 4K only on 16 GB+ cards so 12 GB cards keep high FPS at 1440p.
     entry(config.oot_docked_output,
-          large_card ? OotDockedOutput::Output4k : OotDockedOutput::Output1440p);
+          ultra_card ? OotDockedOutput::Output4k : OotDockedOutput::Output1440p);
 }
 
 /// The table for the default PC (a capable desktop with an AMD card).

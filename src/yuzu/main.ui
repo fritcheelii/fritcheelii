@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-  <string>CheezyEmu</string>
+  <string>FritCheeLii</string>
   </property>
   <property name="windowIcon">
    <iconset resource="yuzu.qrc">
@@ -59,7 +59,7 @@
     </widget>
     <widget class="QMenu" name="menuOpen_Eden_Folders">
      <property name="title">
-      <string>Open &amp;CheezyEmu Folders</string>
+      <string>Open &amp;FritCheeLii Folders</string>
      </property>
      <addaction name="action_Root_Data_Folder"/>
      <addaction name="action_NAND_Folder"/>
@@ -295,7 +295,7 @@
   </action>
   <action name="action_About">
    <property name="text">
-    <string>&amp;About CheezyEmu</string>
+    <string>&amp;About FritCheeLii</string>
    </property>
   </action>
   <action name="action_Single_Window_Mode">
@@ -568,7 +568,7 @@
   </action>
   <action name="action_Eden_Dependencies">
    <property name="text">
-    <string>&amp;CheezyEmu Dependencies</string>
+    <string>&amp;FritCheeLii Dependencies</string>
    </property>
   </action>
   <action name="action_Data_Manager">

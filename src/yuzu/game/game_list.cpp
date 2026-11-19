@@ -1161,5 +1161,5 @@ void GameListPlaceholder::changeEvent(QEvent* event) {
 }
 
 void GameListPlaceholder::RetranslateUI() {
-    text->setText(tr("Welcome to CheezyEmu!\nDouble-click to add a folder with your games"));
+    text->setText(tr("Welcome to FritCheeLii!\nDouble-click to add a folder with your games"));
 }

@@ -22,13 +22,13 @@ AboutDialog::AboutDialog(QWidget* parent)
     const auto yuzu_build_version = override_build.empty() ? yuzu_build : override_build;
 
     ui->setupUi(this);
-    setWindowTitle(tr("About FritCheeLii v4.1"));
+    setWindowTitle(tr("About FritCheeLii v4.2"));
     const QIcon yuzu_logo = QIcon(QStringLiteral(":/img/cheezyemu.ico"));
     if (!yuzu_logo.isNull()) {
         ui->labelLogo->setPixmap(yuzu_logo.pixmap(180));
     }
     ui->labelBuildInfo->setText(
-        tr("<span style='font-size:26px'><b>FritCheeLii v4.1</b></span><br>"
+        tr("<span style='font-size:26px'><b>FritCheeLii v4.2</b></span><br>"
            "%1 (%2)<br><br>"
            "<b>Credits:</b> Built on GPL open-source code with advancements from "
            "<b>Fritchii</b>, <b>CheezyEmu</b>, <b>Lichii</b>, <b>Eden / Yuzu</b>, and <b>Dark (Dynamic FPS)</b>.")
