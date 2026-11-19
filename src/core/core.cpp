@@ -13,7 +13,9 @@
 #include "game_settings.h"
 #include "common/cpu_features.h"
 #include "audio_core/audio_core.h"
+#include "common/fritchii_jit_list.h"
 #include "common/fs/fs.h"
+#include "common/fs/path_util.h"
 #include "common/logging.h"
 #include "common/nx2_sampler.h"
 #include "common/adpf.h"
@@ -507,6 +509,16 @@ struct System::Impl {
         // Make the process created be the application
         kernel.SetApplicationProcess(process->GetHandle());
 
+        // JIT Block List warm-up (Fritchii, Test Lab / FRITCHII_JIT_BLOCK_LIST):
+        if (Common::FritchiiJitList::Mode() != 0 && process->GetHandle()->Is64Bit() &&
+            !system.DebuggerEnabled() &&
+            (Common::FritchiiJitList::Mode() != 1 || kernel.IsMulticore())) {
+            Kernel::KProcess* const kprocess = process->GetHandle();
+            Common::FritchiiJitList::Begin(
+                params.program_id, build_id, GetInteger(kprocess->GetEntryPoint()),
+                kprocess->GetCodeSize(), Common::FS::GetEdenPath(Common::FS::EdenPath::CacheDir));
+        }
+
         // Set up the rest of the system.
         SystemResultStatus init_result{SetupForApplicationProcess(system, emu_window)};
         if (init_result != SystemResultStatus::Success) {
@@ -584,6 +596,7 @@ struct System::Impl {
     }
 
     void ShutdownMainProcess() {
+        Common::FritchiiJitList::End();
         // Waits for a call in progress (it opens the RomFS, a quick step).
         VideoCommon::Nx2Precompile::SetGameFiles(0, {});
         // Each step is logged and the log flushed before it starts: when stopping hangs

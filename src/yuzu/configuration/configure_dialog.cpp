@@ -6,7 +6,9 @@
 
 #include <memory>
 #include <QCheckBox>
+#include <QFrame>
 #include <QLabel>
+#include <QScrollArea>
 #include <QVBoxLayout>
 #include "common/logging.h"
 #include "common/settings.h"
@@ -84,33 +86,93 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
     graphics_test_tab = std::make_unique<QWidget>(this);
     graphics_test_tab->setAccessibleName(tr("Test"));
     {
-        auto* v = new QVBoxLayout(graphics_test_tab.get());
-        v->setSpacing(10);
+        auto* outer = new QVBoxLayout(graphics_test_tab.get());
+        outer->setContentsMargins(0, 0, 0, 0);
+        auto* scroll = new QScrollArea(graphics_test_tab.get());
+        scroll->setWidgetResizable(true);
+        scroll->setFrameShape(QFrame::NoFrame);
+        auto* content = new QWidget(scroll);
+        auto* v = new QVBoxLayout(content);
+        v->setSpacing(8);
+
         auto* intro = new QLabel(
-            tr("Experimental performance switch for A/B testing.\n"
-               "Starts OFF so it never interferes with standard settings. "
+            tr("Experimental performance switches for A/B testing (Fritchii v6.1/v6.2 ports).\n"
+               "All switches start OFF so they never interfere with standard settings. "
                "Restart the game after toggling to measure VRAM & FPS impact."),
-            graphics_test_tab.get());
+            content);
         intro->setWordWrap(true);
         v->addWidget(intro);
 
-        auto* cb_mip = new QCheckBox(tr("4K Texture Mip Cap (4 GB VRAM Saver)"),
-                                     graphics_test_tab.get());
-        cb_mip->setChecked(Settings::values.test_4k_mip_cap.GetValue());
-        auto* note = new QLabel(
+        auto add_switch = [&](const QString& title, const QString& desc, bool checked) {
+            auto* cb = new QCheckBox(title, content);
+            cb->setChecked(checked);
+            auto* note = new QLabel(desc, content);
+            note->setWordWrap(true);
+            note->setContentsMargins(24, 0, 0, 4);
+            note->setStyleSheet(QStringLiteral("color: #9a9aa8; font-size: 11px;"));
+            v->addWidget(cb);
+            v->addWidget(note);
+            return cb;
+        };
+
+        auto* cb_mip = add_switch(
+            tr("4K Texture Mip Cap (4 GB VRAM Saver)"),
             tr("Skips mip level 0 on large mipmapped textures to reduce VRAM bandwidth & pressure.\n"
                "Recommended for: 4 GB GPUs (e.g. GTX 1650, GTX 1050 Ti, RX 570) at 720p/1080p. "
-               "Not recommended for 8 GB+ GPUs at 1440p/4K. Requires game restart."),
-            graphics_test_tab.get());
-        note->setWordWrap(true);
-        note->setContentsMargins(24, 0, 0, 4);
-        note->setStyleSheet(QStringLiteral("color: #9a9aa8; font-size: 11px;"));
-        v->addWidget(cb_mip);
-        v->addWidget(note);
-        v->addStretch(1);
+               "Requires game restart."),
+            Settings::values.test_4k_mip_cap.GetValue());
 
-        apply_graphics_test = [cb_mip]() {
+        auto* cb_shadow = add_switch(
+            tr("Shadow Size Steps (Built-in OoT Patch)"),
+            tr("Rounds OoT local shadow map sizes up to multiples of 64 px so the image pool "
+               "reuses them instead of creating thousands of shadow textures while moving in "
+               "Castle Town / Guard House. Requires game restart."),
+            Settings::values.test_shadow_size_steps.GetValue());
+
+        auto* cb_poll = add_switch(
+            tr("Resource Poll Backoff (Built-in OoT Patch)"),
+            tr("Replaces OoT's busy-spin resource polling loop with a 500 us sleep (svc 0xF3), "
+               "freeing CPU core cycles on 4-core CPUs (e.g. i3-10105F). Requires game restart."),
+            Settings::values.test_poll_backoff.GetValue());
+
+        auto* cb_jit = add_switch(
+            tr("JIT Block List Warm-Up (Fritchii)"),
+            tr("Records compiled ARM64 blocks per game session and pre-warms them on idle cores "
+               "at next launch to reduce CPU micro-stutters in Hyrule Field & Castle Town Market. "
+               "Requires game restart."),
+            Settings::values.test_jit_block_warmup.GetValue());
+
+        auto* cb_occl = add_switch(
+            tr("Occlusion Off (Built-in OoT Patch)"),
+            tr("Disables OoT's GPU occlusion queries and conditional renders to skip GPU->CPU "
+               "readback stalls. Great A/B test in Castle Town Market. Requires game restart."),
+            Settings::values.test_occlusion_off.GetValue());
+
+        auto* cb_tidy = add_switch(
+            tr("Texture Heap Tidy-Up Once a Second (Fritchii v6.2)"),
+            tr("Throttles OoT's texture heap compaction from every frame to once per second, "
+               "avoiding repeated texture re-uploads and VRAM churn on 4 GB GPUs. "
+               "Requires game restart."),
+            Settings::values.test_tex_tidy_1s.GetValue());
+
+        auto* cb_zstd = add_switch(
+            tr("Native Host Zstd Unpacking (Fritchii v6.2)"),
+            tr("Intercepts OoT's Zstd decompression calls in the JIT and runs native host libzstd "
+               "for faster area loads and lower CPU load. Requires game restart."),
+            Settings::values.test_host_zstd.GetValue());
+
+        v->addStretch(1);
+        scroll->setWidget(content);
+        outer->addWidget(scroll);
+
+        apply_graphics_test = [cb_mip, cb_shadow, cb_poll, cb_jit, cb_occl, cb_tidy, cb_zstd]() {
             Settings::values.test_4k_mip_cap.SetValue(cb_mip->isChecked());
+            Settings::values.test_shadow_size_steps.SetValue(cb_shadow->isChecked());
+            Settings::values.test_poll_backoff.SetValue(cb_poll->isChecked());
+            Settings::values.test_jit_block_warmup.SetValue(cb_jit->isChecked());
+            Settings::values.test_occlusion_off.SetValue(cb_occl->isChecked());
+            Settings::values.test_tex_tidy_1s.SetValue(cb_tidy->isChecked());
+            Settings::values.test_host_zstd.SetValue(cb_zstd->isChecked());
         };
     }
     ui->tabWidget->addTab(graphics_test_tab.get(), tr("Test"));

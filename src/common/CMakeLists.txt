@@ -67,6 +67,8 @@ add_library(
     fs/file_lock.h
     fs/fs.cpp
     fs/fs.h
+    fritchii_jit_list.cpp
+    fritchii_jit_list.h
     fs/fs_paths.h
     fs/fs_types.h
     fs/fs_util.cpp

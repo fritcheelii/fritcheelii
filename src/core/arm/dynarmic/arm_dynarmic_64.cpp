@@ -9,10 +9,12 @@
 #if defined(_M_X64) || defined(__x86_64__)
 #include <immintrin.h>
 #endif
+#include "common/fritchii_jit_list.h"
 #include "common/settings.h"
 #include "core/arm/dynarmic/arm_dynarmic.h"
 #include "core/arm/dynarmic/arm_dynarmic_64.h"
 #include "core/arm/dynarmic/dynarmic_exclusive_monitor.h"
+#include "core/arm/dynarmic/host_routines.h"
 #include "core/arm/dynarmic/window_trace.h"
 #include "core/core_timing.h"
 #include "core/hle/kernel/k_process.h"
@@ -54,6 +56,53 @@ Dynarmic::A64::Vector DynarmicCallbacks64::MemoryRead128(u64 vaddr) {
     return {m_memory.Read64(vaddr), m_memory.Read64(vaddr + 8)};
 }
 
+const HostRoutines::Sites& DynarmicCallbacks64::HostSites() {
+    std::call_once(m_host_sites_once, [&] {
+        if (m_process != nullptr) {
+            m_host_sites = HostRoutines::SitesFor(m_parent.m_system, *m_process);
+        }
+    });
+    return m_host_sites;
+}
+
+u32 DynarmicCallbacks64::HostCode(u64 vaddr, u32 instruction) {
+    const HostRoutines::Sites& sites = HostSites();
+    if (sites.last == 0 || vaddr < sites.first || vaddr > sites.last) [[likely]] {
+        return instruction;
+    }
+    return HostRoutines::InstructionFor(m_parent.m_system, *m_process, m_memory, vaddr,
+                                        instruction);
+}
+
+namespace {
+class JitRegisters final : public HostRoutines::Registers {
+public:
+    explicit JitRegisters(Dynarmic::A64::Jit& jit) : m_jit{jit} {}
+    u64 Get(int index) const override {
+        return index == 31 ? m_jit.GetSP() : m_jit.GetRegister(static_cast<std::size_t>(index));
+    }
+    void Set(int index, u64 value) override {
+        if (index == 31) {
+            m_jit.SetSP(value);
+        } else {
+            m_jit.SetRegister(static_cast<std::size_t>(index), value);
+        }
+    }
+    void SetPC(u64 pc) override {
+        m_jit.SetPC(pc);
+    }
+    u32 GetPstate() const override {
+        return m_jit.GetPstate();
+    }
+    void SetPstate(u32 value) override {
+        m_jit.SetPstate(value);
+    }
+
+private:
+    Dynarmic::A64::Jit& m_jit;
+};
+} // namespace
+
 std::optional<u32> DynarmicCallbacks64::MemoryReadCode(u64 vaddr) {
     if (!m_memory.IsValidVirtualAddressRange(vaddr, sizeof(u32)))
         return std::nullopt;
@@ -71,7 +120,7 @@ std::optional<u32> DynarmicCallbacks64::MemoryReadCode(u64 vaddr) {
             return WindowTrace::InstructionFor(m_window_trace->base, vaddr, instruction);
         }
     }
-    return instruction;
+    return HostCode(vaddr, instruction);
 }
 
 void DynarmicCallbacks64::MemoryWrite(Dynarmic::A64::VAddr vaddr, u64 value, std::size_t size) {
@@ -134,6 +183,15 @@ void DynarmicCallbacks64::InstructionCacheOperationRaised(Dynarmic::A64::Instruc
 }
 
 void DynarmicCallbacks64::ExceptionRaised(u64 pc, Dynarmic::A64::Exception exception) {
+    if (exception == Dynarmic::A64::Exception::Breakpoint) {
+        const HostRoutines::Sites& sites = HostSites();
+        if (sites.last != 0 && pc >= sites.first && pc <= sites.last) {
+            JitRegisters regs{*m_parent.m_jit};
+            if (HostRoutines::OnBreakpoint(m_parent.m_system, *m_process, m_memory, regs, pc)) {
+                return;
+            }
+        }
+    }
     if (m_window_trace && exception == Dynarmic::A64::Exception::Breakpoint) {
         const auto point = WindowTrace::Identify(m_window_trace->base, pc, m_memory.Read32(pc));
         if (point != WindowTrace::Point::None) {
@@ -456,7 +514,25 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
         config.fastmem_pointer = std::nullopt;
         config.fastmem_exclusive_access = false;
     }
+    config.on_block_compiled = [](std::uint64_t key) {
+        if (Common::FritchiiJitList::Mode() != 0) {
+            Common::FritchiiJitList::Note(key, false);
+        }
+    };
     m_jit.emplace(config);
+}
+
+std::size_t ArmDynarmic64::WarmCompile(std::span<const u64> keys, const std::atomic<bool>& stop) {
+    std::size_t compiled = 0;
+    for (const u64 key : keys) {
+        if (stop.load(std::memory_order_acquire)) {
+            break;
+        }
+        if (m_jit->PrecompileBlock(key)) {
+            ++compiled;
+        }
+    }
+    return compiled;
 }
 
 HaltReason ArmDynarmic64::RunThread(Kernel::KThread* thread) {

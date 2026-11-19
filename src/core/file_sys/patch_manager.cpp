@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <span>
 
@@ -64,6 +65,7 @@ struct BuiltinPatch {
     size_t state_size = 0;
     // Another built-in this one contains; it is skipped once this one is applied.
     std::string_view replaces{};
+    bool (*setting_enabled)() = nullptr;
 };
 
 constexpr std::array<u8, 4> MAX_RESOLUTION_ORIGINAL{0xE8, 0x41, 0x00, 0x36};
@@ -242,6 +244,115 @@ void ApplyOcarinaFsrPreset(u64 title_id, std::string_view module, std::string_vi
              docked_1440p ? " (docked, 1440p output)" : docked ? " (docked, 4K output)" : "");
 }
 
+// Water ripples at any frame rate (Blitchii PR #1180, ported from Fritchii v6.1/v6.2):
+// Accumulates fractional ripple passes per water object so ripples never freeze or jump
+// when FPS varies or exceeds 60.
+constexpr std::array<u8, 4> WATER_ORIGINAL{0x09, 0x00, 0x38, 0x1E};     // fcvtzs w9, s0
+constexpr std::array<u8, 4> WATER_HOOK{0x4A, 0xFE, 0xEF, 0x94};         // bl 0x3c46f20
+constexpr std::array<u8, 4> WATER_MUL_ORIGINAL{0x08, 0x7D, 0x09, 0x1B}; // mul w8, w8, w9
+constexpr std::array<u8, 4> WATER_MUL_NOP{0x1F, 0x20, 0x03, 0xD5};      // nop
+constexpr std::array<u8, 148> WATER_ROUTINE{
+    0x01, 0x01, 0x22, 0x1E, 0x00, 0x08, 0x21, 0x1E, 0x08, 0x20, 0x20, 0x1E, 0x0D, 0x04, 0x00, 0x54,
+    0xC9, 0x92, 0x00, 0xB0, 0x29, 0x81, 0x38, 0x91, 0x2A, 0x01, 0x02, 0x91, 0xEB, 0x03, 0x09, 0xAA,
+    0x6C, 0x01, 0x40, 0xF9, 0x9F, 0x01, 0x15, 0xEB, 0x60, 0x01, 0x00, 0x54, 0x6B, 0x41, 0x00, 0x91,
+    0x7F, 0x01, 0x0A, 0xEB, 0x61, 0xFF, 0xFF, 0x54, 0x4C, 0x01, 0x40, 0xB9, 0x2B, 0x51, 0x2C, 0x8B,
+    0x75, 0x01, 0x00, 0xF9, 0x7F, 0x09, 0x00, 0xB9, 0x8C, 0x05, 0x00, 0x11, 0x8C, 0x09, 0x00, 0x12,
+    0x4C, 0x01, 0x00, 0xB9, 0x61, 0x09, 0x40, 0xBD, 0x00, 0x28, 0x21, 0x1E, 0x01, 0x10, 0x2C, 0x1E,
+    0x02, 0x28, 0x21, 0x1E, 0x48, 0x00, 0x38, 0x1E, 0x1F, 0x05, 0x00, 0x71, 0x4A, 0x00, 0x00, 0x54,
+    0x28, 0x00, 0x80, 0x52, 0x01, 0x01, 0x22, 0x1E, 0x00, 0x38, 0x21, 0x1E, 0x01, 0x10, 0x3C, 0x1E,
+    0x00, 0x48, 0x21, 0x1E, 0x60, 0x09, 0x00, 0xBD, 0xC0, 0x03, 0x5F, 0xD6, 0xE8, 0x03, 0x1F, 0x2A,
+    0xC0, 0x03, 0x5F, 0xD6,
+};
+constexpr std::array WATER_RIPPLE_RECORDS{
+    BuiltinPatchRecord{0x475F8, WATER_HOOK, WATER_ORIGINAL},
+    BuiltinPatchRecord{0x4760C, WATER_MUL_NOP, WATER_MUL_ORIGINAL},
+    BuiltinPatchRecord{0x3C46F20, WATER_ROUTINE, {}, true},
+};
+
+// Occlusion Off (ported from Fritchii v6.1/v6.2): skips GPU occlusion queries and conditional
+// renders so the CPU never stalls waiting for GPU occlusion readbacks.
+constexpr std::array<u8, 4> MOV_W8_WZR{0xE8, 0x03, 0x1F, 0x2A};
+constexpr std::array<u8, 4> LDRB_W8_X0_BYTES{0x08, 0x00, 0x40, 0x39};
+constexpr std::array OCCLUSION_OFF_RECORDS{
+    BuiltinPatchRecord{0x11ACE68, MOV_W8_WZR, LDRB_W8_X0_BYTES},
+    BuiltinPatchRecord{0x11B828C, MOV_W8_WZR, LDRB_W8_X0_BYTES},
+    BuiltinPatchRecord{0x11B82A4, MOV_W8_WZR, LDRB_W8_X0_BYTES},
+    BuiltinPatchRecord{0x11ACEC8, MOV_W8_WZR, LDRB_W8_X0_BYTES},
+    BuiltinPatchRecord{0x11B82DC, MOV_W8_WZR, LDRB_W8_X0_BYTES},
+    BuiltinPatchRecord{0x11B82F4, MOV_W8_WZR, LDRB_W8_X0_BYTES},
+};
+
+// Resource poll backoff (ported from Fritchii v6.1/v6.2): replaces busy-spin rescanning on the
+// resource request thread with svc #0xf3 (500 us sleep in svc_nx2_oot_poll.cpp).
+constexpr std::array<u8, 4> ZERO_4{0x00, 0x00, 0x00, 0x00};
+constexpr std::array<u8, 4> POLL_RESCAN_ORIG{0x28, 0x70, 0x05, 0x36};   // tbz w8, #0, 0xf8c0
+constexpr std::array<u8, 4> POLL_RESCAN_BRANCH{0x68, 0x2E, 0x01, 0x36}; // tbz w8, #0, 0x17088
+constexpr std::array<u8, 4> POLL_BACKOFF_SVC{0x61, 0x1E, 0x00, 0xD4};   // svc #0xf3
+constexpr std::array<u8, 4> POLL_BACKOFF_RETURN{0x0D, 0xE2, 0xFF, 0x17}; // b 0xf8c0
+constexpr std::array POLL_BACKOFF_RECORDS{
+    BuiltinPatchRecord{0x14ABC, POLL_RESCAN_BRANCH, POLL_RESCAN_ORIG},
+    BuiltinPatchRecord{0x17088, POLL_BACKOFF_SVC, ZERO_4},
+    BuiltinPatchRecord{0x1708C, POLL_BACKOFF_RETURN, ZERO_4},
+};
+
+// Shadow size steps (ported from Fritchii v6.1/v6.2): rounds local_shadow_depth sizes up to
+// multiples of 64 so the image pool reuses shadow maps instead of churning VRAM in Castle Town.
+constexpr std::array<u8, 4> SHADOW_STEPS_ORIG{0xAA, 0xEA, 0x44, 0xB9};   // ldr w10, [x21, #0x4e8]
+constexpr std::array<u8, 4> SHADOW_STEPS_BRANCH{0x30, 0x0B, 0xE8, 0x14}; // b 0x3c46dc0
+constexpr std::array<u8, 16> SHADOW_STEPS_ROUTINE{
+    0xAA, 0xEA, 0x44, 0xB9, // ldr w10, [x21, #0x4e8]
+    0x4A, 0xFD, 0x00, 0x11, // add w10, w10, #0x3f
+    0x4A, 0x65, 0x1A, 0x12, // and w10, w10, #0xffffffc0
+    0xCE, 0xF4, 0x17, 0x17, // b 0x244104
+};
+constexpr std::array SHADOW_STEPS_RECORDS{
+    BuiltinPatchRecord{0x244100, SHADOW_STEPS_BRANCH, SHADOW_STEPS_ORIG},
+    BuiltinPatchRecord{0x3C46DC0, SHADOW_STEPS_ROUTINE, {}, true},
+};
+
+// Texture heap tidy-up once a second (ported from Fritchii v6.2): throttles aglTextureDataMgr
+// compaction from every frame to once per second (19.2 MHz CNTPCT_EL0).
+constexpr std::array<u8, 4> TEX_GAP_ORIG{0x88, 0x00, 0x08, 0x36}; // tbz w8, #1, 0x777288
+constexpr std::array<u8, 4> TEX_GAP_HOOK{0xD6, 0x3E, 0xD3, 0x14}; // b 0x3c46dd0
+constexpr std::array<u8, 48> TEX_GAP_STUB{
+    0x68, 0x01, 0x08, 0x36, 0x29, 0xE0, 0x3B, 0xD5, 0xCA, 0x92, 0x00, 0x90,
+    0x48, 0xD1, 0x47, 0xF9, 0x28, 0x01, 0x08, 0xCB, 0x0B, 0x00, 0x9F, 0x52,
+    0x8B, 0x24, 0xA0, 0x72, 0x1F, 0x01, 0x0B, 0xEB, 0x63, 0x00, 0x00, 0x54,
+    0x49, 0xD1, 0x07, 0xF9, 0x21, 0xC1, 0x2C, 0x17, 0x23, 0xC1, 0x2C, 0x17,
+};
+constexpr std::array TEX_GAP_RECORDS{
+    BuiltinPatchRecord{0x777278, TEX_GAP_HOOK, TEX_GAP_ORIG},
+    BuiltinPatchRecord{0x3C46DD0, TEX_GAP_STUB, {}, true},
+};
+
+bool TestShadowStepsEnabled() {
+    if (const char* v = std::getenv("FRITCHII_SHADOW_STEPS"); v != nullptr && *v != '\0') {
+        return *v != '0';
+    }
+    return Settings::values.test_shadow_size_steps.GetValue();
+}
+
+bool TestPollBackoffEnabled() {
+    if (const char* v = std::getenv("EDEN_NX2_OOT_POLL_BACKOFF"); v != nullptr && *v != '\0') {
+        return *v != '0';
+    }
+    return Settings::values.test_poll_backoff.GetValue();
+}
+
+bool TestOcclusionOffEnabled() {
+    if (const char* v = std::getenv("EDEN_NX2_OCCLUSION_OFF"); v != nullptr && *v != '\0') {
+        return *v != '0';
+    }
+    return Settings::values.test_occlusion_off.GetValue();
+}
+
+bool TestTexTidy1sEnabled() {
+    if (const char* v = std::getenv("FRITCHII_TEX_COMPACT_GAP"); v != nullptr && *v != '\0') {
+        return *v != '0';
+    }
+    return Settings::values.test_tex_tidy_1s.GetValue();
+}
+
 constexpr std::array BUILTIN_PATCHES{
     // Ocarina of Time takes its "dynamic resolution disabled" path, so the 3D renders at full scale
     // instead of following the GPU-time controller down to its 480p floor.
@@ -281,6 +392,49 @@ constexpr std::array BUILTIN_PATCHES{
         .records = DYNAMIC_FPS_RECORDS,
         .state_offset = 0x4E9FE00,
         .state_size = 16,
+    },
+    BuiltinPatch{
+        .name = "Water ripples at any frame rate (built-in)",
+        .title_id = 0x0400486024DEC000,
+        .module = "main",
+        .build_id = "E0F3CCFAF50065AE4EA01EB5AEB13B1A45DA3348",
+        .records = WATER_RIPPLE_RECORDS,
+        .state_offset = 0x4E9FE20,
+        .state_size = 0x84,
+    },
+    BuiltinPatch{
+        .name = "Shadow Size Steps (built-in, Test Lab)",
+        .title_id = 0x0400486024DEC000,
+        .module = "main",
+        .build_id = "E0F3CCFAF50065AE4EA01EB5AEB13B1A45DA3348",
+        .records = SHADOW_STEPS_RECORDS,
+        .setting_enabled = &TestShadowStepsEnabled,
+    },
+    BuiltinPatch{
+        .name = "Resource poll backoff (built-in, Test Lab)",
+        .title_id = 0x0400486024DEC000,
+        .module = "main",
+        .build_id = "E0F3CCFAF50065AE4EA01EB5AEB13B1A45DA3348",
+        .records = POLL_BACKOFF_RECORDS,
+        .setting_enabled = &TestPollBackoffEnabled,
+    },
+    BuiltinPatch{
+        .name = "Occlusion Off (built-in, Test Lab)",
+        .title_id = 0x0400486024DEC000,
+        .module = "main",
+        .build_id = "E0F3CCFAF50065AE4EA01EB5AEB13B1A45DA3348",
+        .records = OCCLUSION_OFF_RECORDS,
+        .setting_enabled = &TestOcclusionOffEnabled,
+    },
+    BuiltinPatch{
+        .name = "Texture heap tidy-up once a second (built-in, Test Lab)",
+        .title_id = 0x0400486024DEC000,
+        .module = "main",
+        .build_id = "E0F3CCFAF50065AE4EA01EB5AEB13B1A45DA3348",
+        .records = TEX_GAP_RECORDS,
+        .state_offset = 0x4E9EFA0,
+        .state_size = 8,
+        .setting_enabled = &TestTexTidy1sEnabled,
     },
 };
 
@@ -706,6 +860,9 @@ std::vector<u8> PatchManager::PatchNSO(const std::vector<u8>& nso, const std::st
     std::vector<std::string_view> replaced;
     for (const auto& patch : BUILTIN_PATCHES) {
         if (patch.title_id != title_id || patch.module != name) {
+            continue;
+        }
+        if (patch.setting_enabled != nullptr && !patch.setting_enabled()) {
             continue;
         }
         if (std::find(disabled.cbegin(), disabled.cend(), patch.name) != disabled.cend()) {
@@ -1363,6 +1520,9 @@ std::vector<Patch> PatchManager::GetPatches(VirtualFile update_raw) const {
 
     for (const auto& patch : BUILTIN_PATCHES) {
         if (patch.title_id != title_id) {
+            continue;
+        }
+        if (patch.setting_enabled != nullptr && !patch.setting_enabled()) {
             continue;
         }
         const auto is_disabled = [&](std::string_view name) {

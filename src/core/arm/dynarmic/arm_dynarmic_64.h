@@ -8,6 +8,7 @@
 
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include "common/container/unordered_map.h"
 
 #include <dynarmic/interface/A64/a64.h>
@@ -16,6 +17,7 @@
 #include "common/hash.h"
 #include "core/arm/arm_interface.h"
 #include "core/arm/dynarmic/dynarmic_exclusive_monitor.h"
+#include "core/arm/dynarmic/host_routines.h"
 #include "dynarmic/interface/A64/config.h"
 
 namespace Core::Memory {
@@ -62,6 +64,8 @@ public:
     u64 GetCNTPCT() override;
     bool CheckMemoryAccess(u64 addr, u64 size, Kernel::DebugWatchpointType type);
     void ReturnException(u64 pc, Dynarmic::HaltReason hr);
+    const HostRoutines::Sites& HostSites();
+    u32 HostCode(u64 vaddr, u32 instruction);
 
     Dynarmic::CodePage cached_code_page;
     u64 last_code_addr = u64(-1);
@@ -73,6 +77,8 @@ public:
     u64 m_spin_ticks{32}; ///< Reads closer than this (~1.7 us) count as a polling loop
     Kernel::KProcess* m_process{};
     std::shared_ptr<WindowTrace::Session> m_window_trace;
+    std::once_flag m_host_sites_once;
+    HostRoutines::Sites m_host_sites{};
     const bool m_debugger_enabled{};
     const bool m_check_memory_access{};
     static constexpr u64 MinimumRunCycles = 10000U;
@@ -90,6 +96,7 @@ public:
 
     HaltReason RunThread(Kernel::KThread* thread) override;
     HaltReason StepThread(Kernel::KThread* thread) override;
+    std::size_t WarmCompile(std::span<const u64> keys, const std::atomic<bool>& stop) override;
 
     void GetContext(Kernel::Svc::ThreadContext& ctx) const override;
     void SetContext(const Kernel::Svc::ThreadContext& ctx) override;

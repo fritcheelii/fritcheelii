@@ -7,6 +7,8 @@
 #include <chrono>
 #include <cstdlib>
 #include <thread>
+#include <vector>
+#include "common/fritchii_jit_list.h"
 #include "common/scope_exit.h"
 #include "common/settings.h"
 #include "core/core.h"
@@ -229,6 +231,35 @@ void PhysicalCore::Idle(KernelCore& kernel) {
     // host's thread wake-up latency to every handoff. EDEN_NX2_IDLE_SPIN_US=<n>: poll for that
     // many microseconds before blocking. Switch 2 titles poll 100 us by default outside Android
     // (title 1's frames: 42 ms without, 35 ms with 50 us, 34 ms with 100 us, 36 ms with 300 us).
+    if (Common::FritchiiJitList::Preloading() &&
+        !m_is_interrupted.load(std::memory_order_acquire)) {
+        if (KProcess* const process = kernel.ApplicationProcess()) {
+            if (auto* const arm = process->GetArmInterface(m_core_index)) {
+                using Clock = std::chrono::steady_clock;
+                constexpr auto Window = std::chrono::milliseconds{100};
+                constexpr auto Budget = std::chrono::milliseconds{20};
+                thread_local std::vector<u64> keys;
+                thread_local Clock::time_point window_start{};
+                thread_local Clock::duration used{};
+                auto now = Clock::now();
+                if (now - window_start >= Window) {
+                    window_start = now;
+                    used = {};
+                }
+                while (used < Budget && !m_is_interrupted.load(std::memory_order_acquire)) {
+                    keys.clear();
+                    if (Common::FritchiiJitList::TakePreload(static_cast<u32>(m_core_index), keys,
+                                                             16) == 0) {
+                        break;
+                    }
+                    static_cast<void>(arm->WarmCompile(keys, m_is_interrupted));
+                    const auto after = Clock::now();
+                    used += after - now;
+                    now = after;
+                }
+            }
+        }
+    }
     static const long long spin_setting = [] {
         const char* text = std::getenv("EDEN_NX2_IDLE_SPIN_US");
         return text ? std::strtoll(text, nullptr, 10) : -1LL;

@@ -45,6 +45,11 @@ public:
     void ClearCache();
 
     /**
+     * Precompiles a single block when the core is idle and enough code cache space remains.
+     */
+    bool PrecompileBlock(std::uint64_t location);
+
+    /**
      * Invalidate the code cache at a range of addresses.
      * @param start_address The starting address of the range to invalidate.
      * @param length The length (in bytes) of the range to invalidate.

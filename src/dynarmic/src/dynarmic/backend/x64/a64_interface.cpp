@@ -101,6 +101,30 @@ public:
         return hr;
     }
 
+    bool PrecompileBlock(u64 location) {
+        if (is_executing) {
+            return false;
+        }
+        bool clear_pending = false;
+        {
+            std::unique_lock lock{invalidation_mutex};
+            clear_pending = invalidate_entire_cache;
+        }
+        if (clear_pending) {
+            PerformRequestedCacheInvalidation(HaltReason::CacheInvalidation);
+        }
+        const IR::LocationDescriptor descriptor{location};
+        if (emitter.GetBasicBlock(descriptor)) {
+            return false;
+        }
+        const size_t keep_free = static_cast<size_t>(conf.code_cache_size) / 2;
+        if (block_of_code.SpaceRemaining() < keep_free) {
+            return false;
+        }
+        static_cast<void>(GetBlock(descriptor, true));
+        return true;
+    }
+
     void ClearCache() {
         std::unique_lock lock{invalidation_mutex};
         invalidate_entire_cache = true;
@@ -241,7 +265,7 @@ private:
         return GetBlock(A64::LocationDescriptor{GetCurrentLocation()}.SetSingleStepping(true));
     }
 
-    CodePtr GetBlock(IR::LocationDescriptor descriptor) {
+    CodePtr GetBlock(IR::LocationDescriptor descriptor, bool warming = false) {
         if (auto block = emitter.GetBasicBlock(descriptor))
             return block->entrypoint;
 
@@ -260,6 +284,9 @@ private:
         ir_block.Reset(arch_descriptor);
         A64::Translate(ir_block, arch_descriptor, get_code, {conf.define_unpredictable_behaviour, conf.wall_clock_cntpct});
         Optimization::Optimize(ir_block, conf, polyfill_options);
+        if (!warming && conf.on_block_compiled) {
+            conf.on_block_compiled(descriptor.Value());
+        }
         return emitter.Emit(ir_block).entrypoint;
     }
 
@@ -308,6 +335,10 @@ HaltReason Jit::Run() {
 
 HaltReason Jit::Step() {
     return impl->Step();
+}
+
+bool Jit::PrecompileBlock(std::uint64_t location) {
+    return impl->PrecompileBlock(location);
 }
 
 void Jit::ClearCache() {

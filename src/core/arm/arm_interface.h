@@ -4,6 +4,7 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <span>
 #include <string>
 #include <vector>
@@ -71,6 +72,11 @@ public:
 
     // Clear a range of the instruction cache for this CPU.
     virtual void InvalidateCacheRange(u64 addr, std::size_t size) = 0;
+
+    // Precompile a batch of recorded A64 block keys while this core is idle.
+    virtual std::size_t WarmCompile(std::span<const u64> keys, const std::atomic<bool>& stop) {
+        return 0;
+    }
 
     // Get the current architecture.
     // This returns AArch64 when PSTATE.nRW == 0 and AArch32 when PSTATE.nRW == 1.

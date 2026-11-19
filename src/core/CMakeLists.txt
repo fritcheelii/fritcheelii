@@ -362,6 +362,8 @@ add_library(core STATIC
     hle/kernel/svc.cpp
     hle/kernel/svc.h
     hle/kernel/svc/svc_activity.cpp
+    hle/kernel/svc/svc_nx2_oot_poll.cpp
+    hle/kernel/svc/svc_nx2_oot_poll.h
     hle/kernel/svc/svc_address_arbiter.cpp
     hle/kernel/svc/svc_address_translation.cpp
     hle/kernel/svc/svc_cache.cpp
@@ -1293,6 +1295,8 @@ if (ARCHITECTURE_x86_64 OR ARCHITECTURE_arm64 OR ARCHITECTURE_riscv64 OR ARCHITE
         arm/dynarmic/arm_dynarmic.h
         arm/dynarmic/arm_dynarmic_64.cpp
         arm/dynarmic/arm_dynarmic_64.h
+        arm/dynarmic/host_routines.cpp
+        arm/dynarmic/host_routines.h
         arm/dynarmic/arm_dynarmic_32.cpp
         arm/dynarmic/arm_dynarmic_32.h
         arm/dynarmic/dynarmic_cp15.cpp
