@@ -19,6 +19,7 @@
 #include "yuzu/game/game_list.h"
 #include "yuzu/main_window.h"
 #include "yuzu/multiplayer/state.h"
+#include "yuzu/util/clickable_label.h"
 
 void MainWindow::SetUpFritchiiUi() {
     if (!FritchiiUi::Enabled()) {

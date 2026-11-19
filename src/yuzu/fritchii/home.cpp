@@ -153,10 +153,7 @@ std::vector<Game> CollectGames(QStandardItemModel* model, const QPixmap& fallbac
         if (game.title.isEmpty()) {
             game.title = QFileInfo(path).completeBaseName();
         }
-        const QByteArray icon_data = item->data(GameListItemPath::IconDataRole).toByteArray();
-        if (!game.icon.loadFromData(icon_data)) {
-            game.icon = item->data(Qt::DecorationRole).value<QPixmap>();
-        }
+        game.icon = item->data(Qt::DecorationRole).value<QPixmap>();
         if (IsBlank(game.icon)) {
             game.icon = LocalCover(path);
         }
