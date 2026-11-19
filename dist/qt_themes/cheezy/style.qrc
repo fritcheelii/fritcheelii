@@ -1,0 +1,14 @@
+<!--
+SPDX-FileCopyrightText: 2026 CheezyEmu contributors
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
+<RCC>
+    <qresource prefix="icons/cheezy">
+        <file alias="index.theme">icons/index.theme</file>
+    </qresource>
+    <qresource prefix="cheezy">
+        <file>style.qss</file>
+        <file>fonts/Nunito.ttf</file>
+    </qresource>
+</RCC>

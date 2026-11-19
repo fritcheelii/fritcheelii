@@ -1,0 +1,300 @@
+﻿name: release-binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish the binaries as a GitHub release
+        type: boolean
+        default: true
+  push:
+    branches:
+      - main
+      - master
+      - nx2-experimental
+    paths:
+      - "src/**"
+      - "!src/tests/**"
+      - "CMakeLists.txt"
+      - "CMakeModules/**"
+      - "externals/**"
+      - "dist/**"
+      - "tools/**"
+      - ".patch/**"
+      - "cpmfile.json"
+      - "*.profdata"
+      - ".github/workflows/release-binaries.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-binaries-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare-release:
+    name: Prepare release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Prepare release tag
+        if: github.event_name == 'push' || inputs.publish_release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          retry() { local n; for n in 1 2 3 4; do "$@" && return 0; echo "::warning::attempt $n of '$*' failed; retrying" >&2; sleep $((n * 30)); done; return 1; }
+          tag="v3.0"
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/$tag" >/dev/null 2>&1; then
+            retry gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/$tag" \
+              -f "sha=$GITHUB_SHA" -F "force=true"
+          else
+            retry gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f "ref=refs/tags/$tag" -f "sha=$GITHUB_SHA"
+          fi
+
+  build:
+    name: ${{ matrix.platform }} binary
+    needs: prepare-release
+    runs-on: ${{ matrix.runner }}
+    env:
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 3G
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x86_64-pgo
+            runner: windows-2022
+            pgo: true
+            profile: cheezyemu-windows.profdata
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Check PGO profile
+        if: matrix.pgo
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "${{ matrix.profile }}"
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install LLVM on Windows
+        shell: pwsh
+        run: ./tools/windows/install-llvm.ps1
+
+      - name: Install Qt on Windows
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.3"
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: qtcharts
+          cache: true
+
+      - name: Install sccache on Windows
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP 'sccache.zip'
+          $url = 'https://github.com/mozilla/sccache/releases/download/v0.19.0/sccache-v0.19.0-x86_64-pc-windows-msvc.zip'
+          $ok = $false
+          foreach ($attempt in 1..5) {
+            try {
+              Invoke-WebRequest -OutFile $zip $url -TimeoutSec 120
+              $ok = $true
+              break
+            } catch {
+              Write-Host "sccache download attempt $attempt failed: $($_.Exception.Message)"
+              Start-Sleep -Seconds (15 * $attempt)
+            }
+          }
+          if (-not $ok) {
+            Write-Host "::warning::sccache could not be downloaded; building without the compiler cache"
+            exit 0
+          }
+          Expand-Archive $zip -DestinationPath (Join-Path $env:RUNNER_TEMP 'sccache')
+          $bin = (Get-ChildItem -Recurse -Filter sccache.exe (Join-Path $env:RUNNER_TEMP 'sccache')).DirectoryName
+          $bin | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+
+      - name: Install Vulkan SDK on Windows
+        shell: pwsh
+        run: ./tools/windows/install-vulkan-sdk.ps1
+
+      - name: Verify Vulkan tools on Windows
+        shell: pwsh
+        run: glslangValidator --version
+
+      - name: Restore CPM downloads
+        id: cpm-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .cache/cpm
+          key: cpm-${{ matrix.platform }}-v2-${{ hashFiles('cpmfile.json', 'CMakeLists.txt', 'CMakeModules/CPM*.cmake', 'externals/**/CMakeLists.txt', 'src/**/CMakeLists.txt') }}
+          restore-keys: |
+            cpm-${{ matrix.platform }}-v2-
+            cpm-${{ runner.os }}-
+
+      - name: Restore compiler objects
+        id: compiler-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .sccache
+          key: objects-${{ matrix.platform }}-${{ hashFiles(matrix.profile) }}-v2-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            objects-${{ matrix.platform }}-${{ hashFiles(matrix.profile) }}-v2-${{ github.sha }}-
+            objects-${{ matrix.platform }}-${{ hashFiles(matrix.profile) }}-v2-
+
+      - name: Configure Windows PGO
+        shell: bash
+        run: |
+          set -euo pipefail
+          flags="-DWIN32 -D_WINDOWS -DNOMINMAX -flto=thin"
+          flags+=" -fprofile-use=$(cygpath -m "$PWD/${{ matrix.profile }}")"
+          flags+=" -Wno-error=profile-instr-out-of-date -Wno-error=profile-instr-unprofiled"
+          flags+=" -Wno-error=backend-plugin"
+          launcher=()
+          if command -v sccache > /dev/null; then
+            launcher=(-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache)
+          fi
+          retry() { local n; for n in 1 2 3 4; do "$@" && return 0; echo "::warning::attempt $n of '$*' failed; retrying" >&2; sleep $((n * 30)); done; return 1; }
+          retry cmake -S . -B build/release -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=OFF \
+            -DYUZU_TESTS=OFF \
+            -DYUZU_CMD=ON \
+            -DYUZU_ROOM=OFF \
+            -DYUZU_ROOM_STANDALONE=OFF \
+            -DYUZU_USE_BUNDLED_QT=OFF \
+            -DYUZU_USE_BUNDLED_SDL3=ON \
+            -DYUZU_USE_BUNDLED_SIRIT=OFF \
+            -DENABLE_WERROR=OFF \
+            -DENABLE_UPDATE_CHECKER=ON \
+            -DLICHII_BUILD_PLATFORM=${{ matrix.platform }} \
+            -DUSE_DISCORD_PRESENCE=OFF \
+            "${launcher[@]}" \
+            "-DCMAKE_C_COMPILER=$LLVM_ROOT/bin/clang-cl.exe" \
+            "-DCMAKE_CXX_COMPILER=$LLVM_ROOT/bin/clang-cl.exe" \
+            "-DCMAKE_LINKER=$LLVM_ROOT/bin/lld-link.exe" \
+            "-DCMAKE_AR=$LLVM_ROOT/bin/llvm-lib.exe" \
+            "-DCMAKE_EXE_LINKER_FLAGS=/machine:x64" \
+            "-DCMAKE_C_FLAGS=$flags" \
+            "-DCMAKE_CXX_FLAGS=-EHsc $flags"
+
+      - name: Save CPM downloads
+        if: steps.cpm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: .cache/cpm
+          key: ${{ steps.cpm-cache.outputs.cache-primary-key }}
+
+      - name: Build
+        shell: bash
+        run: |
+          if command -v sccache > /dev/null; then sccache --zero-stats; fi
+          cmake --build build/release --target yuzu --parallel
+          if command -v sccache > /dev/null; then sccache --show-stats; fi
+
+      - name: Stop sccache on Windows
+        if: always() && steps.compiler-cache.outcome == 'success'
+        shell: pwsh
+        run: if (Get-Command sccache -ErrorAction SilentlyContinue) { sccache --stop-server 2>$null; $global:LASTEXITCODE = 0 }
+
+      - name: Save compiler objects
+        if: always() && steps.compiler-cache.outcome == 'success'
+        uses: actions/cache/save@v5
+        with:
+          path: .sccache
+          key: ${{ steps.compiler-cache.outputs.cache-primary-key }}
+
+      - name: Package Windows binary
+        shell: pwsh
+        run: |
+          if (Test-Path "build/release/bin/cheezyemu.exe") {
+            Move-Item -Force "build/release/bin/cheezyemu.exe" "build/release/bin/FritCheeLii.exe"
+          }
+          if (-not (Test-Path "build/release/bin/FritCheeLii.exe")) {
+            throw "build/release/bin/FritCheeLii.exe was not produced"
+          }
+          windeployqt --release --no-translations build/release/bin/FritCheeLii.exe
+
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: FritCheeLii-${{ matrix.platform }}-${{ github.sha }}
+          path: build/release/bin/
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish release
+    needs: build
+    if: github.event_name == 'push' || inputs.publish_release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@v7
+        with:
+          name: FritCheeLii-windows-x86_64-pgo-${{ github.sha }}
+          path: "stage/FritCheeLii v3.0"
+
+      - name: Package release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          test -f "stage/FritCheeLii v3.0/FritCheeLii.exe"
+          (cd stage && zip -qr "${GITHUB_WORKSPACE}/dist/FritCheeLii-v3.0.zip" "FritCheeLii v3.0")
+          ls -la dist
+
+      - name: Create release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          retry() { local n; for n in 1 2 3 4; do "$@" && return 0; echo "::warning::attempt $n of '$*' failed; retrying" >&2; sleep $((n * 30)); done; return 1; }
+          tag="v3.0"
+          tag_sha=$(retry gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" --jq '.object.sha')
+          if [ "$tag_sha" != "$GITHUB_SHA" ]; then
+            echo "Release tag ${tag} points to $tag_sha instead of $GITHUB_SHA"
+            exit 1
+          fi
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}"
+          cat > notes.md <<EOF
+          # FritCheeLii v3.0
+
+          ## Download (Windows 64-bit Â· Clang 22.1.8 + ThinLTO + PGO)
+          - **[FritCheeLii-v3.0.zip](${base}/FritCheeLii-v3.0.zip)**
+
+          Extraia o arquivo \`FritCheeLii-v3.0.zip\` â€” ele criarÃ¡ a pasta **\`FritCheeLii v3.0\`** contendo o executÃ¡vel **\`FritCheeLii.exe\`**.
+
+          ## What's New in v3.0
+          - **Ocarina of Time FSR 3D Scale Preset** (Native / Native AA / Quality / Balanced / Performance / Ultra Performance)
+          - **Fused Horizontal FPS Overlay** (gold bar layout + live CPU%, GPU ms/busy%, bottleneck status, RAM/VRAM)
+          - **Stable Shader Cache** (driver/GPU keyed, no automatic 120k background recompile during gameplay, no flickering status bar)
+          - **Reset Shader Cache...** in \`Settings â†’ Graphics â†’ Advanced\`
+          - **New \`Test\` Lab tab** in \`Settings â†’ Graphics\` (isolated A/B switches with hardware recommendations)
+          - **Simplified Universal Saves** (Export / Import for Emulators, NX2Navi, Hookshot, Longshot & .zip)
+          - **Fixed maximized window resize bug** on game launch
+
+          ## Credits
+          Built on GPL open-source code with advancements from **Fritchii**, **CheezyEmu**, **Lichii**, **Eden / Yuzu**, and **Dark (Dynamic FPS)**.
+          EOF
+
+          gh release delete "${tag}" --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true
+          gh release create "${tag}" dist/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --verify-tag \
+            --prerelease \
+            --title "FritCheeLii v3.0" \
+            --notes-file notes.md
