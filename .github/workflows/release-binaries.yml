@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           retry() { local n; for n in 1 2 3 4; do "$@" && return 0; echo "::warning::attempt $n of '$*' failed; retrying" >&2; sleep $((n * 30)); done; return 1; }
-          tag="v3.0"
+          tag="v4.0"
           if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/$tag" >/dev/null 2>&1; then
             retry gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/$tag" \
               -f "sha=$GITHUB_SHA" -F "force=true"
@@ -245,15 +245,15 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: FritCheeLii-windows-x86_64-pgo-${{ github.sha }}
-          path: "stage/FritCheeLii v3.0"
+          path: "stage/FritCheeLii v4.0"
 
       - name: Package release files
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
-          test -f "stage/FritCheeLii v3.0/FritCheeLii.exe"
-          (cd stage && zip -qr "${GITHUB_WORKSPACE}/dist/FritCheeLii-v3.0.zip" "FritCheeLii v3.0")
+          test -f "stage/FritCheeLii v4.0/FritCheeLii.exe"
+          (cd stage && zip -qr "${GITHUB_WORKSPACE}/dist/FritCheeLii-v4.0.zip" "FritCheeLii v4.0")
           ls -la dist
 
       - name: Create release
@@ -263,7 +263,7 @@ jobs:
         run: |
           set -euo pipefail
           retry() { local n; for n in 1 2 3 4; do "$@" && return 0; echo "::warning::attempt $n of '$*' failed; retrying" >&2; sleep $((n * 30)); done; return 1; }
-          tag="v3.0"
+          tag="v4.0"
           tag_sha=$(retry gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" --jq '.object.sha')
           if [ "$tag_sha" != "$GITHUB_SHA" ]; then
             echo "Release tag ${tag} points to $tag_sha instead of $GITHUB_SHA"
@@ -271,14 +271,14 @@ jobs:
           fi
           base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}"
           cat > notes.md <<EOF
-          # FritCheeLii v3.0
+          # FritCheeLii v4.0
 
           ## Download (Windows 64-bit Â· Clang 22.1.8 + ThinLTO + PGO)
-          - **[FritCheeLii-v3.0.zip](${base}/FritCheeLii-v3.0.zip)**
+          - **[FritCheeLii-v4.0.zip](${base}/FritCheeLii-v4.0.zip)**
 
-          Extraia o arquivo \`FritCheeLii-v3.0.zip\` â€” ele criarÃ¡ a pasta **\`FritCheeLii v3.0\`** contendo o executÃ¡vel **\`FritCheeLii.exe\`**.
+          Extraia o arquivo \`FritCheeLii-v4.0.zip\` â€” ele criarÃ¡ a pasta **\`FritCheeLii v4.0\`** contendo o executÃ¡vel **\`FritCheeLii.exe\`**.
 
-          ## What's New in v3.0
+          ## What's New in v4.0
           - **Ocarina of Time FSR 3D Scale Preset** (Native / Native AA / Quality / Balanced / Performance / Ultra Performance)
           - **Fused Horizontal FPS Overlay** (gold bar layout + live CPU%, GPU ms/busy%, bottleneck status, RAM/VRAM)
           - **Stable Shader Cache** (driver/GPU keyed, no automatic 120k background recompile during gameplay, no flickering status bar)
@@ -296,5 +296,5 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --verify-tag \
             --prerelease \
-            --title "FritCheeLii v3.0" \
+            --title "FritCheeLii v4.0" \
             --notes-file notes.md

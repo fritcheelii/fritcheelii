@@ -68,6 +68,7 @@ class WaitTreeWidget;
 class PerformanceOverlay;
 namespace FritchiiUi {
 class GameControls;
+class Home;
 }
 #ifdef HAS_RESHADE
 class ConfigurePostProcessing;
@@ -500,6 +501,7 @@ private:
     ContentManager::InstallResult InstallNCA(const QString& filename);
     void UpdateWindowTitle(std::string_view title_name = {}, std::string_view title_version = {},
                            std::string_view gpu_vendor = {});
+    void SetUpFritchiiUi();
     void OnApplicationChanged(u64 program_id);
     void UpdateDockedButton();
     void UpdateAPIText();
@@ -566,6 +568,7 @@ private:
     OverlayDialog* shutdown_dialog{};
     PerformanceOverlay* perf_overlay = nullptr;
     FritchiiUi::GameControls* game_controls_strip = nullptr;
+    FritchiiUi::Home* fritchii_home = nullptr;
 #ifdef HAS_RESHADE
     ConfigurePostProcessing* post_processing_dialog = nullptr;
 #endif

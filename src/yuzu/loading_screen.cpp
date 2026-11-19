@@ -154,10 +154,7 @@ protected:
             fill = {inner.left(), inner.top(), std::max(inner.height(), inner.width() * shown),
                     inner.height()};
         }
-        QLinearGradient gradient{fill.topLeft(), fill.topRight()};
-        gradient.setColorAt(0.0, QColor(0xA7, 0x8B, 0xFA));
-        gradient.setColorAt(1.0, QColor(0xFF, 0xD2, 0x3F));
-        painter.setBrush(gradient);
+        painter.setBrush(QColor(0x9B, 0x72, 0xF2));
         painter.drawRoundedRect(fill, inner.height() / 2, inner.height() / 2);
 
         if (!busy) {

@@ -261,9 +261,12 @@ add_executable(yuzu
     configuration/addon/mod_select_dialog.h configuration/addon/mod_select_dialog.cpp configuration/addon/mod_select_dialog.ui
 
     render/performance_overlay.h render/performance_overlay.cpp
+    fritchii/fritchii.qrc
+    fritchii/fritchii_ui.h fritchii/fritchii_ui.cpp
+    fritchii/home.h fritchii/home.cpp
     fritchii/game_controls.h fritchii/game_controls.cpp
+    fritchii/main_window_fritchii.cpp
     fritchii/saves_window.h fritchii/saves_window.cpp
-    fritchii/fritchii_icons.qrc
     updater/update_dialog.h updater/update_dialog.cpp updater/update_dialog.ui
     game/common.h
     game/carousel.h game/carousel.cpp
@@ -466,6 +469,8 @@ elseif(WIN32)
 endif()
 
 target_link_libraries(yuzu PRIVATE nlohmann_json::nlohmann_json)
+# fritchii/ includes ui_main.h, which AutoUic already generates for main_window.cpp.
+set_source_files_properties(fritchii/fritchii_ui.cpp fritchii/main_window_fritchii.cpp PROPERTIES SKIP_AUTOUIC ON)
 target_link_libraries(yuzu PRIVATE common core input_common frontend_common network video_core qt_common)
 target_link_libraries(yuzu PRIVATE Boost::headers Qt6::Widgets Qt6::Charts Qt6::Concurrent Qt6::Network)
 # Unpacks NVIDIA's files from the Streamline release (nvidia_dlss_panel.cpp).

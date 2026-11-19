@@ -18,7 +18,9 @@
 #include "common/settings_enums.h"
 #include "frontend_common/settings_generator.h"
 #include "render/performance_overlay.h"
+#include "yuzu/fritchii/fritchii_ui.h"
 #include "yuzu/fritchii/game_controls.h"
+#include "yuzu/fritchii/home.h"
 #include "yuzu/fritchii/saves_window.h"
 #ifdef HAS_RESHADE
 #include "configuration/configure_post_processing.h"
@@ -607,6 +609,7 @@ MainWindow::MainWindow(bool has_broken_vulkan)
     controller_dialog->refreshConfiguration();
 
     UpdateWindowTitle();
+    SetUpFritchiiUi();
 
     show();
     ShowWhatsNew();
@@ -2128,30 +2131,6 @@ void MainWindow::ConnectMenuEvents() {
     connect_menu(ui->action_Firmware_From_ZIP, &MainWindow::OnInstallFirmwareFromZIP);
     connect_menu(ui->action_Install_Keys, &MainWindow::OnInstallDecryptionKeys);
     connect_menu(ui->action_About, &MainWindow::OnAbout);
-    // FritCheeLii: Universal Saves (Import / Export) action in File menu
-    {
-        auto* const saves_act = new QAction(tr("Saves (Import / Export)..."), ui->menu_File);
-        ui->menu_File->insertAction(ui->action_Exit, saves_act);
-        connect(saves_act, &QAction::triggered, this, [this] {
-            FritchiiUi::ShowSavesWindow(this, [this] { return emulation_running; });
-        });
-    }
-    // FritCheeLii: Floating top hover control bar during gameplay
-    game_controls_strip = new FritchiiUi::GameControls(
-        this,
-        FritchiiUi::GameControlHooks{
-            .render = [this]() -> QWidget* { return render_window; },
-            .running = [this]() -> bool {
-                return emulation_running && QtCommon::emu_thread &&
-                       QtCommon::emu_thread->IsRunning();
-            },
-            .pause = ui->action_Pause,
-            .restart = ui->action_Restart,
-            .stop = ui->action_Stop,
-            .fullscreen = ui->action_Fullscreen,
-            .menus = {ui->menu_File, ui->menu_Emulation, ui->menu_View, ui->menu_Tools,
-                      ui->menu_Help},
-        });
     connect_menu(ui->action_Eden_Dependencies, &MainWindow::OnEdenDependencies);
     connect_menu(ui->action_Apply_Recommended_Settings, &MainWindow::OnApplyRecommendedSettings);
     connect_menu(ui->action_Restore_Previous_Settings, &MainWindow::OnRestorePreviousSettings);
@@ -5827,7 +5806,7 @@ void MainWindow::UpdateWindowTitle(std::string_view title_name, std::string_view
                                    std::string_view gpu_vendor) {
     static const std::string build_id = std::string{Common::g_build_id};
     static const std::string yuzu_title =
-        fmt::format("FritCheeLii | v3.0 | {}", std::string{Common::g_compiler_id});
+        fmt::format("FritCheeLii | v4.0 | {}", std::string{Common::g_compiler_id});
 
     const auto override_title =
         fmt::format(fmt::runtime(std::string(Common::g_title_bar_format_idle)), build_id);
@@ -6666,6 +6645,15 @@ void MainWindow::UpdateUITheme() {
         AdjustLinkColor();
     }
 #endif
+
+    if (FritchiiUi::ApplyTheme()) {
+        setStyleSheet(QString{});
+#ifdef _WIN32
+        RemoveTitlebarFilter();
+        ApplyGlobalDarkTitlebar(true);
+#endif
+        return;
+    }
 
     if (current_theme != default_theme) {
         QString theme_uri{QStringLiteral(":%1/style.qss").arg(current_theme)};
