@@ -463,6 +463,9 @@ struct Values {
     Setting<bool> test_jit_block_warmup{linkage, false, "test_jit_block_warmup",
                                         Category::Miscellaneous};
     Setting<bool> test_host_zstd{linkage, false, "test_host_zstd", Category::Miscellaneous};
+    Setting<bool> test_vram_gc_4gb{linkage, false, "test_vram_gc_4gb", Category::Miscellaneous};
+    // 0 = Switch (Default), 1 = Xbox, 2 = PlayStation, 3 = PC, 4 = Steam Deck
+    Setting<int> oot_button_icons{linkage, 0, "oot_button_icons", Category::Miscellaneous};
     // Ocarina of Time docked: FSR writes 4K (the default), or 1440p, the game's own docked image,
     // which costs less. FSR presets size the scene against that output.
     SwitchableSetting<OotDockedOutput> oot_docked_output{linkage, OotDockedOutput::Output4k,

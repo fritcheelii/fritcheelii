@@ -244,6 +244,7 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
         const char* value = std::getenv("EDEN_NX2_TC_MIN_AGE");
         return value != nullptr ? std::strtoull(value, nullptr, 10) : 300ULL;
     }();
+    const bool smart_gc_4gb = Settings::values.test_vram_gc_4gb.GetValue();
     const auto Configure = [&](bool allow_aggressive) {
         high_priority_mode = out_of_memory || used_memory() >= expected_memory;
         aggressive_mode =
@@ -252,7 +253,16 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
         if (!out_of_memory && used_memory() < critical_memory + 512_MiB) {
             ticks_to_destroy = (std::max)(ticks_to_destroy, min_age);
         }
+        // Fritchii v6.2 Thrash Guard: keep hot textures used in the last 12 frames alive under
+        // 4 GB VRAM pressure so they are not deleted and recreated dozens of times per frame.
+        if (smart_gc_4gb && !out_of_memory) {
+            ticks_to_destroy = (std::max)(ticks_to_destroy, 12ULL);
+        }
         num_iterations = aggressive_mode ? 40 : (high_priority_mode ? 20 : 10);
+        // NX2navi v0.10.1 pressure relief: drain dead render targets faster past expected budget.
+        if (smart_gc_4gb && high_priority_mode) {
+            num_iterations *= 2;
+        }
     };
     const auto Cleanup = [&](ImageId image_id) {
         if (num_iterations == 0) {
@@ -261,9 +271,11 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
         if (busy(image_id)) {
             return false;
         }
-        --num_iterations;
         auto& image = slot_images[image_id];
         if (True(image.flags & ImageFlagBits::IsDecoding)) {
+            if (!smart_gc_4gb) {
+                --num_iterations;
+            }
             return false;
         }
         // A render target drawn over is dropped without copying it back (the idea of Hookshot
@@ -275,8 +287,14 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
             // An image the GPU wrote waits for the GPU to copy it back first (a hitch each, while
             // turning the camera in Ocarina): only past the critical threshold.
             (!aggressive_mode && !out_of_memory && must_download)) {
+            // Fritchii v6.2 FRITCHII_TC_COLLECT_EVICTABLE: do not waste GC budget on un-evictable
+            // ASTC/downloadable textures when dead textures sit right behind them.
+            if (!smart_gc_4gb) {
+                --num_iterations;
+            }
             return false;
         }
+        --num_iterations;
         if (must_download) {
             // As DownloadMemory: a batch is capped so the staging memory held at once stays bounded.
             constexpr size_t MaxBatchBytes = 64_MiB;

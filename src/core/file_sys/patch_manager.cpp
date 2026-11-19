@@ -1087,6 +1087,28 @@ void PatchManager::ApplyLayeredFS(VirtualFile& romfs, ContentRecordType type) co
         }
     }
 
+    // FritCheeLii: Built-in OoT Button Icons selector (Switch / Xbox / PlayStation / PC / Steam Deck)
+    if (title_id == 0x0400486024DEC000 && load_dir != nullptr) {
+        constexpr std::array<const char*, 5> ICON_STYLES{"", "xbox", "playstation", "pc",
+                                                         "steamdeck"};
+        const int style_idx = Settings::values.oot_button_icons.GetValue();
+        if (style_idx >= 1 && style_idx < static_cast<int>(ICON_STYLES.size())) {
+            if (auto icons_root = FindSubdirectoryCaseless(load_dir, "button_icons");
+                icons_root != nullptr) {
+                if (auto style_dir = FindSubdirectoryCaseless(icons_root, ICON_STYLES[style_idx]);
+                    style_dir != nullptr) {
+                    auto target = FindSubdirectoryCaseless(style_dir, "romfs");
+                    if (target == nullptr) {
+                        target = style_dir;
+                    }
+                    LOG_INFO(Loader, "    RomFS: Applying OoT Button Icons ({})",
+                             ICON_STYLES[style_idx]);
+                    layers.emplace_back(std::make_shared<CachedVfsDirectory>(std::move(target)));
+                }
+            }
+        }
+    }
+
     // When there are no layers to apply, return early as there is no need to rebuild the RomFS
     if (layers.empty() && layers_ext.empty()) {
         return;

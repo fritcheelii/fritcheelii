@@ -6,7 +6,9 @@
 
 #include <memory>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QFrame>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QScrollArea>
 #include <QVBoxLayout>
@@ -161,11 +163,40 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
                "for faster area loads and lower CPU load. Requires game restart."),
             Settings::values.test_host_zstd.GetValue());
 
+        auto* cb_vram_gc = add_switch(
+            tr("4 GB VRAM Smart Texture GC (Fritchii v6.2 + NX2navi)"),
+            tr("Prevents hot-texture thrashing (12-frame floor), skips un-evictable ASTC textures "
+               "without wasting GC budget, and recycles dead render targets faster past 80% VRAM. "
+               "Recommended for 4 GB GPUs (e.g. GTX 1650)."),
+            Settings::values.test_vram_gc_4gb.GetValue());
+
+        auto* btn_row = new QHBoxLayout();
+        auto* btn_lbl = new QLabel(tr("Button Icons (Zelda OoT):"), content);
+        auto* combo_icons = new QComboBox(content);
+        combo_icons->addItems({tr("Switch (Default)"), tr("Xbox"), tr("PlayStation"),
+                               tr("PC (Keyboard/Mouse)"), tr("Steam Deck")});
+        const int cur_icons = Settings::values.oot_button_icons.GetValue();
+        combo_icons->setCurrentIndex(cur_icons >= 0 && cur_icons < combo_icons->count() ? cur_icons
+                                                                                        : 0);
+        btn_row->addWidget(btn_lbl);
+        btn_row->addWidget(combo_icons, 1);
+        v->addLayout(btn_row);
+
+        auto* btn_note = new QLabel(
+            tr("Selects on-screen controller button prompts from user/load/0400486024DEC000/"
+               "button_icons/<style>. Requires game restart."),
+            content);
+        btn_note->setWordWrap(true);
+        btn_note->setContentsMargins(24, 0, 0, 4);
+        btn_note->setStyleSheet(QStringLiteral("color: #9a9aa8; font-size: 11px;"));
+        v->addWidget(btn_note);
+
         v->addStretch(1);
         scroll->setWidget(content);
         outer->addWidget(scroll);
 
-        apply_graphics_test = [cb_mip, cb_shadow, cb_poll, cb_jit, cb_occl, cb_tidy, cb_zstd]() {
+        apply_graphics_test = [cb_mip, cb_shadow, cb_poll, cb_jit, cb_occl, cb_tidy, cb_zstd,
+                               cb_vram_gc, combo_icons]() {
             Settings::values.test_4k_mip_cap.SetValue(cb_mip->isChecked());
             Settings::values.test_shadow_size_steps.SetValue(cb_shadow->isChecked());
             Settings::values.test_poll_backoff.SetValue(cb_poll->isChecked());
@@ -173,6 +204,8 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
             Settings::values.test_occlusion_off.SetValue(cb_occl->isChecked());
             Settings::values.test_tex_tidy_1s.SetValue(cb_tidy->isChecked());
             Settings::values.test_host_zstd.SetValue(cb_zstd->isChecked());
+            Settings::values.test_vram_gc_4gb.SetValue(cb_vram_gc->isChecked());
+            Settings::values.oot_button_icons.SetValue(combo_icons->currentIndex());
         };
     }
     ui->tabWidget->addTab(graphics_test_tab.get(), tr("Test"));
