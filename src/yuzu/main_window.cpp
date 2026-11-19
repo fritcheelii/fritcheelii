@@ -2133,7 +2133,7 @@ void MainWindow::ConnectMenuEvents() {
         auto* const saves_act = new QAction(tr("Saves (Import / Export)..."), ui->menu_File);
         ui->menu_File->insertAction(ui->action_Exit, saves_act);
         connect(saves_act, &QAction::triggered, this, [this] {
-            FritchiiUi::OpenSavesWindow(this, [this] { return emulation_running; });
+            FritchiiUi::ShowSavesWindow(this, [this] { return emulation_running; });
         });
     }
     // FritCheeLii: Floating top hover control bar during gameplay
@@ -2142,7 +2142,8 @@ void MainWindow::ConnectMenuEvents() {
         FritchiiUi::GameControlHooks{
             .render = [this]() -> QWidget* { return render_window; },
             .running = [this]() -> bool {
-                return emulation_running && emu_thread && emu_thread->IsRunning();
+                return emulation_running && QtCommon::emu_thread &&
+                       QtCommon::emu_thread->IsRunning();
             },
             .pause = ui->action_Pause,
             .restart = ui->action_Restart,
