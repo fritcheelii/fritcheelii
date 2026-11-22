@@ -909,9 +909,7 @@ void PerformanceOverlay::paintEvent(QPaintEvent*) {
             }
             painter.setFont(m_value);
             if (!m_cpu_core_text.isEmpty()) {
-                const QColor cpu_col = m_cpu_temp >= 85     ? Bad
-                                     : m_cpu_max_core >= 90 ? Accent
-                                                            : Text;
+                const QColor cpu_col = m_cpu_max_core >= 90 ? Accent : Text;
                 painter.setPen(cpu_col);
                 painter.drawText(cell.x + names, first, m_cpu_core_text);
             }

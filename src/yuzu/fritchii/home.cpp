@@ -8,6 +8,7 @@
 
 #include <QApplication>
 #include <QBoxLayout>
+#include <QComboBox>
 #include <QDir>
 #include <QEvent>
 #include <QFileInfo>
@@ -323,6 +324,7 @@ QWidget* Home::MakePage() {
     saves->setFocusPolicy(Qt::NoFocus);
     connect(saves, &QPushButton::clicked, this, [this] {
         ShowSavesWindow(window, hooks.emulation_running);
+        RefreshSaveSlots();
     });
     links->addWidget(saves);
     auto* credits = new QPushButton(Icon(QStringLiteral("heart"), 18),
@@ -362,6 +364,8 @@ QWidget* Home::MakePage() {
     title->setMaximumWidth(680);
     side->addWidget(title);
     side->addSpacing(24);
+    auto* play_row = new QHBoxLayout;
+    play_row->setSpacing(12);
     play = new QPushButton;
     play->setObjectName(QStringLiteral("FritchiiPlay"));
     play->setCursor(Qt::PointingHandCursor);
@@ -370,10 +374,39 @@ QWidget* Home::MakePage() {
         if (hero_path.isEmpty()) {
             hooks.add_folder();
         } else {
+            if (hero_id == OcarinaOfTime &&
+                !ChooseOotSaveSlotBeforePlay(window, hooks.emulation_running)) {
+                return;
+            }
+            RefreshSaveSlots();
             hooks.play(hero_path, hero_id);
         }
     });
-    side->addWidget(play, 0, Qt::AlignLeft);
+    play_row->addWidget(play);
+
+    save_slot_combo = new QComboBox(page);
+    save_slot_combo->setCursor(Qt::PointingHandCursor);
+    save_slot_combo->setFocusPolicy(Qt::NoFocus);
+    save_slot_combo->setToolTip(
+        tr("Select which of the 8 Zelda OoT Multi-Save slots is active before playing."));
+    save_slot_combo->setStyleSheet(QStringLiteral(
+        "QComboBox { background-color: #181820; color: #f4f4f0; border: 1px solid #2e2e3a; "
+        "border-radius: 8px; padding: 0 12px; min-height: 40px; min-width: 240px; font-size: 13px; }"
+        "QComboBox:hover { border-color: #a78bfa; }"
+        "QComboBox::drop-down { border: none; width: 24px; }"
+        "QComboBox QAbstractItemView { background-color: #181820; color: #f4f4f0; "
+        "selection-background-color: #2b2444; border: 1px solid #2e2e3a; }"));
+    connect(save_slot_combo, &QComboBox::activated, this, [this](int idx) {
+        if (hooks.emulation_running && hooks.emulation_running()) {
+            RefreshSaveSlots();
+            return;
+        }
+        SwitchOotSaveSlot(idx + 1);
+        RefreshSaveSlots();
+    });
+    play_row->addWidget(save_slot_combo);
+    play_row->addStretch(1);
+    side->addLayout(play_row);
     side->addStretch(1);
     hero->addLayout(side, 1);
     layout->addLayout(hero);
@@ -434,6 +467,7 @@ void Home::Refresh() {
         play->setText(tr("Add Folder"));
         play->setIcon(Glyph(QStringLiteral("plus"), 0x1c1433, 18));
     }
+    RefreshSaveSlots();
 
     // The small row: the other games, then "All games" and "Add folder".
     // deleteLater: a tile's own click can land here.
@@ -535,6 +569,36 @@ bool Home::eventFilter(QObject* watched, QEvent* event) {
         QTimer::singleShot(0, this, &Home::Restore);
     }
     return QObject::eventFilter(watched, event);
+}
+
+void Home::RefreshSaveSlots() {
+    if (!save_slot_combo) {
+        return;
+    }
+    if (hero_id != OcarinaOfTime) {
+        save_slot_combo->hide();
+        return;
+    }
+    const auto slots = ListOotSaveSlots();
+    save_slot_combo->blockSignals(true);
+    save_slot_combo->clear();
+    int active_idx = 0;
+    for (int i = 0; i < static_cast<int>(slots.size()); ++i) {
+        const auto& s = slots[static_cast<size_t>(i)];
+        const QString status = s.has_data
+                                   ? (s.date_str.isEmpty() ? tr("Saved") : s.date_str)
+                                   : tr("Empty");
+        save_slot_combo->addItem(
+            tr("Slot %1 — %2 (%3)").arg(s.slot).arg(s.name, status));
+        if (s.active) {
+            active_idx = i;
+        }
+    }
+    if (!slots.empty()) {
+        save_slot_combo->setCurrentIndex(active_idx);
+    }
+    save_slot_combo->blockSignals(false);
+    save_slot_combo->show();
 }
 
 } // namespace FritchiiUi

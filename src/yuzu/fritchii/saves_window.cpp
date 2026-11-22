@@ -19,11 +19,13 @@
 
 #include <JlCompress.h>
 #include <fmt/format.h>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QDialog>
+#include <QEvent>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFrame>
@@ -253,6 +255,20 @@ void SyncDirCopy(const fs::path& src, const fs::path& dst) {
     if (DirHasFiles(src)) {
         fs::create_directories(dst);
         fs::copy(src, dst, fs::copy_options::recursive | fs::copy_options::overwrite_existing);
+    }
+}
+
+void EnsureSlot1Seeded(const fs::path& fritchii, const fs::path& slots_root) {
+    const fs::path slot1_dir = slots_root / "slot_1";
+    const fs::path nand_oot = OotActiveNandDir(fritchii);
+    if (!DirHasFiles(slot1_dir / "data") && DirHasFiles(nand_oot)) {
+        SyncDirCopy(nand_oot, slot1_dir / "data");
+        const QString stamp =
+            QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm"));
+        WriteSlotMeta(slot1_dir, QObject::tr("Main Campaign"), stamp);
+        if (!fs::exists(slots_root / "active_slot.txt")) {
+            WriteActiveSlot(slots_root, 1);
+        }
     }
 }
 
@@ -951,11 +967,18 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
             const int idx = order[static_cast<size_t>(card_pos)];
             auto& mc = mini_cards[static_cast<size_t>(card_pos)];
             const bool is_used = used[static_cast<size_t>(idx)];
+            const bool is_manual = (idx == 0);
             const bool is_newest = (idx == newest_idx);
-            mc.frame->setStyleSheet(
-                is_newest
-                    ? QStringLiteral("QFrame { background-color: #161422; border: 1.5px solid #a78bfa; border-radius: 6px; }")
-                    : QStringLiteral("QFrame { background-color: #0e0e13; border: 1px solid #252530; border-radius: 6px; }"));
+            if (is_manual && is_used) {
+                mc.frame->setStyleSheet(QStringLiteral(
+                    "QFrame { background-color: #1c1910; border: 1.5px solid #ffd23f; border-radius: 6px; }"));
+            } else if (is_newest) {
+                mc.frame->setStyleSheet(QStringLiteral(
+                    "QFrame { background-color: #161422; border: 1.5px solid #a78bfa; border-radius: 6px; }"));
+            } else {
+                mc.frame->setStyleSheet(QStringLiteral(
+                    "QFrame { background-color: #0e0e13; border: 1px solid #252530; border-radius: 6px; }"));
+            }
             const QPixmap& pix = pics[static_cast<size_t>(idx)];
             if (!pix.isNull()) {
                 mc.img->setText(QString{});
@@ -965,11 +988,17 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                 mc.img->setText(is_used ? QObject::tr("No preview") : QObject::tr("Empty"));
             }
             const QString tag =
-                idx == 0 ? QObject::tr("F1 Manual") : QObject::tr("F%1 Auto").arg(idx + 1);
+                is_manual ? (is_newest ? QObject::tr("★ Manual (Latest)") : QObject::tr("★ Manual"))
+                          : QObject::tr("Auto %1").arg(idx);
             const QDateTime& dt = times[static_cast<size_t>(idx)];
             const QString stamp = dt.isValid()
                                       ? dt.toString(QStringLiteral("MM-dd HH:mm"))
                                       : (is_used ? QObject::tr("Saved") : QObject::tr("Empty"));
+            mc.cap->setStyleSheet(
+                (is_manual && is_used)
+                    ? QStringLiteral("color: #ffd23f; font-size: 10px; font-weight: 700;")
+                    : (is_newest ? QStringLiteral("color: #c4b5fd; font-size: 10px; font-weight: 600;")
+                                 : QStringLiteral("color: #a8a8b4; font-size: 10px;")));
             mc.cap->setText(QStringLiteral("%1 • %2").arg(tag, stamp));
         }
     };
@@ -1775,6 +1804,269 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
     });
     QObject::connect(close, &QPushButton::clicked, &dialog, &QDialog::accept);
     dialog.exec();
+}
+
+std::vector<OotSlotBrief> ListOotSaveSlots() {
+    const fs::path fritchii = SaveRoot(Common::FS::GetEdenPath(Common::FS::EdenPath::NandDir));
+    const fs::path slots_root = OotSlotsRoot(fritchii);
+    const fs::path nand_oot = OotActiveNandDir(fritchii);
+    EnsureSlot1Seeded(fritchii, slots_root);
+    const int active = ReadActiveSlot(slots_root);
+
+    std::vector<OotSlotBrief> out;
+    out.reserve(8);
+    for (int i = 1; i <= 8; ++i) {
+        const fs::path sdir = slots_root / fmt::format("slot_{}", i);
+        const SlotMeta meta = ReadSlotMeta(sdir, i);
+        const fs::path inspect_dir = (i == active && DirHasFiles(nand_oot)) ? nand_oot : (sdir / "data");
+        const OotSaveSummary sum = InspectOotSaveDir(inspect_dir, false);
+        OotSlotBrief brief;
+        brief.slot = i;
+        brief.name = meta.name;
+        brief.has_data = sum.has_data;
+        brief.active = (i == active);
+        if (sum.has_data) {
+            brief.date_str =
+                sum.newest_time.isValid() ? FormatSaveDate(sum.newest_time) : meta.updated;
+        }
+        out.push_back(std::move(brief));
+    }
+    return out;
+}
+
+bool SwitchOotSaveSlot(int target_slot) {
+    const int target = std::clamp(target_slot, 1, 8);
+    const fs::path fritchii = SaveRoot(Common::FS::GetEdenPath(Common::FS::EdenPath::NandDir));
+    const fs::path slots_root = OotSlotsRoot(fritchii);
+    const fs::path nand_oot = OotActiveNandDir(fritchii);
+    EnsureSlot1Seeded(fritchii, slots_root);
+    const int active = ReadActiveSlot(slots_root);
+    if (target == active) {
+        return true;
+    }
+    try {
+        const QString stamp =
+            QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm"));
+        if (DirHasFiles(nand_oot)) {
+            const fs::path active_dir = slots_root / fmt::format("slot_{}", active);
+            SyncDirCopy(nand_oot, active_dir / "data");
+            const SlotMeta active_meta = ReadSlotMeta(active_dir, active);
+            WriteSlotMeta(active_dir, active_meta.name, stamp);
+        }
+        const fs::path target_data = slots_root / fmt::format("slot_{}", target) / "data";
+        std::error_code ec;
+        fs::remove_all(nand_oot, ec);
+        if (DirHasFiles(target_data)) {
+            SyncDirCopy(target_data, nand_oot);
+        }
+        WriteActiveSlot(slots_root, target);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+namespace {
+
+class SlotCardFilter final : public QObject {
+public:
+    SlotCardFilter(int slot_id, std::function<void(int)> on_pick,
+                   std::function<void(int)> on_launch, QObject* parent)
+        : QObject(parent), slot{slot_id}, pick{std::move(on_pick)}, launch{std::move(on_launch)} {}
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (event->type() == QEvent::MouseButtonPress) {
+            pick(slot);
+            return true;
+        }
+        if (event->type() == QEvent::MouseButtonDblClick) {
+            launch(slot);
+            return true;
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    int slot;
+    std::function<void(int)> pick;
+    std::function<void(int)> launch;
+};
+
+} // namespace
+
+bool ChooseOotSaveSlotBeforePlay(QWidget* parent, const std::function<bool()>& emulation_running) {
+    const fs::path fritchii = SaveRoot(Common::FS::GetEdenPath(Common::FS::EdenPath::NandDir));
+    const fs::path slots_root = OotSlotsRoot(fritchii);
+    const fs::path nand_oot = OotActiveNandDir(fritchii);
+    EnsureSlot1Seeded(fritchii, slots_root);
+
+    std::error_code ec;
+    if (fs::is_regular_file(slots_root / "skip_play_picker.txt", ec)) {
+        return true;
+    }
+
+    QDialog dialog(parent);
+    dialog.setWindowTitle(QObject::tr("Choose Save Slot — Zelda OoT"));
+    dialog.setWindowFlag(Qt::WindowContextHelpButtonHint, false);
+    dialog.setMinimumWidth(680);
+
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->setSpacing(10);
+
+    auto* header = new QLabel(
+        QObject::tr("<b>Select which Save Slot to load for Zelda OoT</b><br>"
+                    "<span style='color:#96969e;font-size:12px;'>All 8 slots are ready to use — "
+                    "double-click a slot to launch immediately.</span>"),
+        &dialog);
+    layout->addWidget(header);
+
+    auto* grid = new QGridLayout;
+    grid->setSpacing(10);
+
+    struct PickerCard {
+        QFrame* frame = nullptr;
+        QLabel* img = nullptr;
+        QLabel* title = nullptr;
+        QLabel* meta = nullptr;
+    };
+    std::array<PickerCard, 8> cards{};
+    int selected_slot = ReadActiveSlot(slots_root);
+
+    const auto update_styles = [&] {
+        const int active = ReadActiveSlot(slots_root);
+        for (int i = 0; i < 8; ++i) {
+            const int slot_num = i + 1;
+            const bool is_sel = (slot_num == selected_slot);
+            const bool is_act = (slot_num == active);
+            cards[static_cast<size_t>(i)].frame->setStyleSheet(
+                is_sel ? QStringLiteral(
+                             "QFrame { background-color: #191628; border: 2px solid #a78bfa; "
+                             "border-radius: 8px; }")
+                       : (is_act ? QStringLiteral(
+                                       "QFrame { background-color: #14141b; border: 1px solid #ffd23f; "
+                                       "border-radius: 8px; }")
+                                 : QStringLiteral(
+                                       "QFrame { background-color: #111117; border: 1px solid #262632; "
+                                       "border-radius: 8px; }")));
+        }
+    };
+
+    const auto populate_cards = [&] {
+        const int active = ReadActiveSlot(slots_root);
+        for (int i = 0; i < 8; ++i) {
+            const int slot_num = i + 1;
+            const fs::path sdir = slots_root / fmt::format("slot_{}", slot_num);
+            const SlotMeta meta = ReadSlotMeta(sdir, slot_num);
+            const fs::path inspect_dir =
+                (slot_num == active && DirHasFiles(nand_oot)) ? nand_oot : (sdir / "data");
+            const OotSaveSummary sum = InspectOotSaveDir(inspect_dir, true);
+            auto& card = cards[static_cast<size_t>(i)];
+            if (sum.has_data && !sum.preview.isNull()) {
+                card.img->setText(QString{});
+                card.img->setPixmap(RoundedThumbnail(sum.preview, 144, 80, 5));
+            } else {
+                card.img->setPixmap(QPixmap{});
+                card.img->setText(sum.has_data ? QObject::tr("Saved") : QObject::tr("Empty — New Save"));
+            }
+            const QString badge = (slot_num == active) ? QObject::tr(" [ACTIVE]") : QString{};
+            card.title->setText(QObject::tr("Slot %1 — %2%3").arg(slot_num).arg(meta.name, badge));
+            if (sum.has_data) {
+                const QString d = sum.newest_time.isValid() ? FormatSaveDate(sum.newest_time) : meta.updated;
+                card.meta->setText(d.isEmpty() ? QObject::tr("%1 / 6 files").arg(sum.used_files)
+                                               : QObject::tr("%1 / 6 files • %2").arg(sum.used_files).arg(d));
+            } else {
+                card.meta->setText(QObject::tr("Empty slot"));
+            }
+        }
+        update_styles();
+    };
+
+    const auto pick_slot = [&](int slot_num) {
+        selected_slot = slot_num;
+        update_styles();
+    };
+    const auto launch_slot = [&](int slot_num) {
+        selected_slot = slot_num;
+        dialog.accept();
+    };
+
+    for (int i = 0; i < 8; ++i) {
+        auto* frame = new QFrame(&dialog);
+        frame->setCursor(Qt::PointingHandCursor);
+        auto* vbox = new QVBoxLayout(frame);
+        vbox->setContentsMargins(8, 8, 8, 8);
+        vbox->setSpacing(4);
+
+        auto* img = new QLabel(frame);
+        img->setFixedSize(144, 80);
+        img->setAlignment(Qt::AlignCenter);
+        img->setStyleSheet(QStringLiteral(
+            "background-color: #0b0b10; border-radius: 5px; color: #7a7a88; font-size: 11px;"));
+        vbox->addWidget(img, 0, Qt::AlignCenter);
+
+        auto* title = new QLabel(frame);
+        title->setStyleSheet(QStringLiteral("color: #f4f4f0; font-size: 11px; font-weight: 600;"));
+        title->setAlignment(Qt::AlignCenter);
+        vbox->addWidget(title);
+
+        auto* meta = new QLabel(frame);
+        meta->setStyleSheet(QStringLiteral("color: #96969e; font-size: 10px;"));
+        meta->setAlignment(Qt::AlignCenter);
+        vbox->addWidget(meta);
+
+        auto* filter = new SlotCardFilter(i + 1, pick_slot, launch_slot, frame);
+        frame->installEventFilter(filter);
+        img->installEventFilter(filter);
+        title->installEventFilter(filter);
+        meta->installEventFilter(filter);
+
+        cards[static_cast<size_t>(i)] = PickerCard{frame, img, title, meta};
+        grid->addWidget(frame, i / 4, i % 4);
+    }
+    layout->addLayout(grid);
+
+    populate_cards();
+
+    auto* skip_cb =
+        new QCheckBox(QObject::tr("Don't ask again (launch active slot directly)"), &dialog);
+    layout->addWidget(skip_cb);
+
+    auto* bottom = new QHBoxLayout;
+    auto* manage_btn = new QPushButton(QObject::tr("Manage Saves..."), &dialog);
+    auto* cancel_btn = new QPushButton(QObject::tr("Cancel"), &dialog);
+    auto* play_btn = new QPushButton(QObject::tr("Play Selected Slot"), &dialog);
+    play_btn->setDefault(true);
+    play_btn->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #7c3aed; color: #ffffff; font-weight: 700; "
+        "padding: 7px 16px; border-radius: 6px; border: none; }"
+        "QPushButton:hover { background-color: #8b5cf6; }"));
+    bottom->addWidget(manage_btn);
+    bottom->addStretch(1);
+    bottom->addWidget(cancel_btn);
+    bottom->addWidget(play_btn);
+    layout->addLayout(bottom);
+
+    QObject::connect(manage_btn, &QPushButton::clicked, &dialog, [&] {
+        ShowSavesWindow(&dialog, emulation_running);
+        selected_slot = ReadActiveSlot(slots_root);
+        populate_cards();
+    });
+    QObject::connect(cancel_btn, &QPushButton::clicked, &dialog, &QDialog::reject);
+    QObject::connect(play_btn, &QPushButton::clicked, &dialog, &QDialog::accept);
+
+    if (dialog.exec() != QDialog::Accepted) {
+        return false;
+    }
+    if (skip_cb->isChecked()) {
+        std::error_code dir_ec;
+        fs::create_directories(slots_root, dir_ec);
+        std::ofstream skip_out(slots_root / "skip_play_picker.txt", std::ios::trunc);
+        if (skip_out) {
+            skip_out << "1\n";
+        }
+    }
+    return SwitchOotSaveSlot(selected_slot);
 }
 
 } // namespace FritchiiUi

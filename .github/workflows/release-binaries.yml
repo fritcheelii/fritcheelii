@@ -283,7 +283,7 @@ jobs:
           - **Refined \`PerformanceOverlay\`:** top banner shows RAM bus/channel only (\`DDR4 2666 MHz (Dual Channel)\`), \`RAM\` row displays used / total GB, and removed frozen ACPI CPU temperature reading
           - **Restored 1-Click \`30 FPS ↔ 60 FPS\` Status-Bar Toggle** from \`v4.2\` (custom caps available via \`FPS Limit\` in \`Settings → Graphics\`)
           - **Automatic \`Xbox (PC Layout — A Confirm)\` Swap:** selecting it automatically swaps \`A↔B / X↔Y\` without a confirmation popup
-          - **Chronological 6-Thumbnail Save Grid:** Triforce-style 6-file preview grid now sorted newest first, matching the in-game Load screen
+          - **8-Slot Save Selector on Home + Visual 4×2 Play Picker + Gold \`★ Manual\` Highlight:** choose any of the 8 Zelda OoT save slots right next to \`Play\` or via the visual 4×2 thumbnail picker when clicking \`Play\`, plus chronological 3×2 save preview with a gold \`★ Manual\` badge
 
           ## Highlights from v5.0 / v5.1
           - **Zelda OoT Multi-Save Manager (8 Slots) + Triforce Save System:** live location thumbnail preview (\`caption.sav\`), Switch/Snapshot/Rename/Export, and cross-emulator auto-detection (Triforce/Hookshot, AkynoLeyend, NX2Saria/NX2navi, Ryujinx, Eden, Lichii, Yuzu)

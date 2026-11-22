@@ -8,6 +8,7 @@
 #include "common/common_types.h"
 
 class QBoxLayout;
+class QComboBox;
 class QHBoxLayout;
 class QLabel;
 class QMainWindow;
@@ -58,6 +59,7 @@ private:
     void ShowList();
     void Restore();
     void Refresh();
+    void RefreshSaveSlots();
 
     QWidget* MakeRail();
     QWidget* MakePage();
@@ -74,6 +76,7 @@ private:
     QLabel* cover = nullptr;
     QLabel* title = nullptr;
     QPushButton* play = nullptr;
+    QComboBox* save_slot_combo = nullptr;
     QHBoxLayout* row = nullptr;
     QWidget* row_box = nullptr;
     QTimer* refresh_timer = nullptr;
