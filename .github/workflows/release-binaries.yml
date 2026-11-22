@@ -284,6 +284,7 @@ jobs:
           - **Restored 1-Click \`30 FPS ↔ 60 FPS\` Status-Bar Toggle** from \`v4.2\` (custom caps available via \`FPS Limit\` in \`Settings → Graphics\`)
           - **Automatic \`Xbox (PC Layout — A Confirm)\` Swap:** selecting it automatically swaps \`A↔B / X↔Y\` without a confirmation popup
           - **8-Slot Save Selector on Home + Visual 4×2 Play Picker + Gold \`★ Manual\` Highlight:** choose any of the 8 Zelda OoT save slots right next to \`Play\` or via the visual 4×2 thumbnail picker when clicking \`Play\`, plus chronological 3×2 save preview with a gold \`★ Manual\` badge
+          - **Timestamped Log History + \`Help → Export Logs (.zip)...\`:** previous logs are archived with date/time in \`user/log/history/\` (keeping the 30 most recent) and can be exported as a single \`.zip\` from the \`Help\` menu
 
           ## Highlights from v5.0 / v5.1
           - **Zelda OoT Multi-Save Manager (8 Slots) + Triforce Save System:** live location thumbnail preview (\`caption.sav\`), Switch/Snapshot/Rename/Export, and cross-emulator auto-detection (Triforce/Hookshot, AkynoLeyend, NX2Saria/NX2navi, Ryujinx, Eden, Lichii, Yuzu)

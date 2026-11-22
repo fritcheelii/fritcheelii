@@ -2125,6 +2125,8 @@ void MainWindow::ConnectMenuEvents() {
     connect_menu(ui->action_SDMC_Folder, &MainWindow::OnOpenSDMCFolder);
     connect_menu(ui->action_Mod_Folder, &MainWindow::OnOpenModFolder);
     connect_menu(ui->action_Log_Folder, &MainWindow::OnOpenLogFolder);
+    ui->menu_Help->addAction(tr("Export Logs (.zip)..."), this,
+                             [this] { FritchiiUi::ExportLogsZip(this); });
 
     connect_menu(ui->action_Verify_installed_contents, &MainWindow::OnVerifyInstalledContents);
     connect_menu(ui->action_Firmware_From_Folder, &MainWindow::OnInstallFirmware);

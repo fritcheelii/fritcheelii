@@ -34,4 +34,7 @@ bool SwitchOotSaveSlot(int target_slot);
 /// Returns true if the launch should proceed, false if the user cancelled.
 bool ChooseOotSaveSlotBeforePlay(QWidget* parent, const std::function<bool()>& emulation_running);
 
+/// Exports all emulator logs (including log/history/) to a user-chosen .zip file.
+void ExportLogsZip(QWidget* parent);
+
 } // namespace FritchiiUi

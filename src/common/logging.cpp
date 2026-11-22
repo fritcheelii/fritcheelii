@@ -4,14 +4,19 @@
 // SPDX-FileCopyrightText: 2014 Citra Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <climits>
+#include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <deque>
+#include <filesystem>
 #include <mutex>
 #include <regex>
 #include <thread>
+#include <vector>
 
 #if defined(__ANDROID__)
 #include <android/log.h>
@@ -24,6 +29,7 @@
 #endif
 
 #include <boost/algorithm/string/replace.hpp>
+#include <fmt/format.h>
 #include <fmt/ranges.h>
 
 #include "common/fs/file.h"
@@ -247,17 +253,59 @@ struct ColorConsoleBackend final : public Backend {
 /// @brief Backend that writes to a file passed into the constructor
 struct FileBackend final : public Backend {
     explicit FileBackend(const std::filesystem::path filename) noexcept {
-        // Move a log over its ".old.txt" copy. The rename replaces the copy atomically, and fails
-        // if the log is still open elsewhere (e.g. in a Lichii process that hasn't exited yet).
-        // A log that can't even be checked counts as a failure, so it is never truncated.
+        // Archive previous non-empty log into log/history/ with a date-time stamp (keeping the
+        // 30 newest logs). Fails if the log is still open elsewhere so it is never truncated.
         const auto rotate = [](const std::filesystem::path& path) {
             std::error_code ec;
-            if (!std::filesystem::exists(path, ec))
+            if (!std::filesystem::exists(path, ec)) {
                 return !ec;
-            auto old_path = path;
-            old_path += ".old.txt";
-            std::filesystem::rename(path, old_path, ec);
-            return !ec;
+            }
+            const auto sz = std::filesystem::file_size(path, ec);
+            if (!ec && sz == 0) {
+                std::filesystem::remove(path, ec);
+                return !ec;
+            }
+            const auto history_dir = path.parent_path() / "history";
+            std::filesystem::create_directories(history_dir, ec);
+            if (ec) {
+                return false;
+            }
+            const std::time_t now = std::time(nullptr);
+            std::tm tm_now{};
+#ifdef _WIN32
+            localtime_s(&tm_now, &now);
+#else
+            localtime_r(&now, &tm_now);
+#endif
+            char stamp[32]{};
+            if (std::strftime(stamp, sizeof(stamp), "%Y-%m-%d_%H-%M-%S", &tm_now) == 0) {
+                std::snprintf(stamp, sizeof(stamp), "session");
+            }
+            const std::string stem = path.stem().string();
+            auto archived = history_dir / fmt::format("{}_{}.txt", stem, stamp);
+            for (int suffix = 1; std::filesystem::exists(archived, ec) && suffix < 100; ++suffix) {
+                archived = history_dir / fmt::format("{}_{}_{}.txt", stem, stamp, suffix);
+            }
+            std::filesystem::rename(path, archived, ec);
+            if (ec) {
+                return false;
+            }
+            std::vector<std::filesystem::path> entries;
+            for (const auto& entry : std::filesystem::directory_iterator(history_dir, ec)) {
+                if (entry.is_regular_file(ec) && entry.path().extension() == ".txt") {
+                    entries.push_back(entry.path());
+                }
+            }
+            if (entries.size() > 30) {
+                std::sort(entries.begin(), entries.end(),
+                          [](const auto& a, const auto& b) {
+                              return a.filename().string() > b.filename().string();
+                          });
+                for (std::size_t i = 30; i < entries.size(); ++i) {
+                    std::filesystem::remove(entries[i], ec);
+                }
+            }
+            return true;
         };
         // If the log can't be moved, write this session to a second log (eden_log_2.txt) so that
         // the previous session is kept and this one still gets the full size limit. If that one

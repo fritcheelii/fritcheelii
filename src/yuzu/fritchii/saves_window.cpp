@@ -1807,7 +1807,7 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
 }
 
 std::vector<OotSlotBrief> ListOotSaveSlots() {
-    const fs::path fritchii = SaveRoot(Common::FS::GetEdenPath(Common::FS::EdenPath::NandDir));
+    const fs::path fritchii = SaveRoot(Common::FS::GetEdenPath(Common::FS::EdenPath::NANDDir));
     const fs::path slots_root = OotSlotsRoot(fritchii);
     const fs::path nand_oot = OotActiveNandDir(fritchii);
     EnsureSlot1Seeded(fritchii, slots_root);
@@ -1836,7 +1836,7 @@ std::vector<OotSlotBrief> ListOotSaveSlots() {
 
 bool SwitchOotSaveSlot(int target_slot) {
     const int target = std::clamp(target_slot, 1, 8);
-    const fs::path fritchii = SaveRoot(Common::FS::GetEdenPath(Common::FS::EdenPath::NandDir));
+    const fs::path fritchii = SaveRoot(Common::FS::GetEdenPath(Common::FS::EdenPath::NANDDir));
     const fs::path slots_root = OotSlotsRoot(fritchii);
     const fs::path nand_oot = OotActiveNandDir(fritchii);
     EnsureSlot1Seeded(fritchii, slots_root);
@@ -1896,7 +1896,7 @@ private:
 } // namespace
 
 bool ChooseOotSaveSlotBeforePlay(QWidget* parent, const std::function<bool()>& emulation_running) {
-    const fs::path fritchii = SaveRoot(Common::FS::GetEdenPath(Common::FS::EdenPath::NandDir));
+    const fs::path fritchii = SaveRoot(Common::FS::GetEdenPath(Common::FS::EdenPath::NANDDir));
     const fs::path slots_root = OotSlotsRoot(fritchii);
     const fs::path nand_oot = OotActiveNandDir(fritchii);
     EnsureSlot1Seeded(fritchii, slots_root);
@@ -2067,6 +2067,38 @@ bool ChooseOotSaveSlotBeforePlay(QWidget* parent, const std::function<bool()>& e
         }
     }
     return SwitchOotSaveSlot(selected_slot);
+}
+
+void ExportLogsZip(QWidget* parent) {
+    const fs::path log_dir = Common::FS::GetEdenPath(Common::FS::EdenPath::LogDir);
+    if (!DirHasFiles(log_dir)) {
+        QMessageBox::information(parent, QObject::tr("Export Logs"),
+                                 QObject::tr("No log files were found yet."));
+        return;
+    }
+    QString base_dir = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+    if (base_dir.isEmpty()) {
+        base_dir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    }
+    const QString stamp =
+        QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd_HH-mm"));
+    const QString default_path =
+        base_dir + QStringLiteral("/FritCheeLii-Logs-%1.zip").arg(stamp);
+    const QString dest_zip = QFileDialog::getSaveFileName(
+        parent, QObject::tr("Export Logs (.zip)"), default_path,
+        QObject::tr("Zip Archive (*.zip)"));
+    if (dest_zip.isEmpty()) {
+        return;
+    }
+    if (JlCompress::compressDir(dest_zip, Text(log_dir), true)) {
+        QMessageBox::information(
+            parent, QObject::tr("Export Logs"),
+            QObject::tr("Logs exported successfully to:\n%1").arg(dest_zip));
+    } else {
+        QMessageBox::warning(
+            parent, QObject::tr("Export Logs"),
+            QObject::tr("Failed to export logs to:\n%1").arg(dest_zip));
+    }
 }
 
 } // namespace FritchiiUi

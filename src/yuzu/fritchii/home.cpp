@@ -579,12 +579,12 @@ void Home::RefreshSaveSlots() {
         save_slot_combo->hide();
         return;
     }
-    const auto slots = ListOotSaveSlots();
+    const auto save_slots = ListOotSaveSlots();
     save_slot_combo->blockSignals(true);
     save_slot_combo->clear();
     int active_idx = 0;
-    for (int i = 0; i < static_cast<int>(slots.size()); ++i) {
-        const auto& s = slots[static_cast<size_t>(i)];
+    for (int i = 0; i < static_cast<int>(save_slots.size()); ++i) {
+        const auto& s = save_slots[static_cast<size_t>(i)];
         const QString status = s.has_data
                                    ? (s.date_str.isEmpty() ? tr("Saved") : s.date_str)
                                    : tr("Empty");
@@ -594,7 +594,7 @@ void Home::RefreshSaveSlots() {
             active_idx = i;
         }
     }
-    if (!slots.empty()) {
+    if (!save_slots.empty()) {
         save_slot_combo->setCurrentIndex(active_idx);
     }
     save_slot_combo->blockSignals(false);
