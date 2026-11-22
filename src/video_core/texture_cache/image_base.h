@@ -117,7 +117,6 @@ struct ImageBase {
     /// CpuModified. Empty while CpuModified means all of it that can hold data.
     std::vector<std::pair<u64, u64>> dirty_ranges;
     u64 scale_tick = 0;
-    u64 last_use_tick = 0;
     bool has_scaled = false;
     /// Frames (TextureCache frame ticks) of the last two that fully cleared this image as a
     /// render target: one cleared in both this frame and the one before is redrawn every frame.

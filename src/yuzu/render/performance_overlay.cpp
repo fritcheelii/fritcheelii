@@ -137,80 +137,6 @@ int QueryMaxCpuCorePercent() {
     return max_pct >= 0.0 ? static_cast<int>(std::lround(max_pct)) : -1;
 }
 
-int QueryCpuTempCelsius() {
-    struct PdhFmtDouble {
-        DWORD CStatus;
-        double doubleValue;
-    };
-    struct PdhItemDoubleW {
-        LPWSTR szName;
-        PdhFmtDouble FmtValue;
-    };
-    constexpr DWORD kPdhFmtDouble = 0x00000200;
-    constexpr LONG kPdhMoreData = static_cast<LONG>(0x800007D2L);
-
-    using OpenQueryFn = LONG(WINAPI*)(LPCWSTR, DWORD_PTR, HANDLE*);
-    using AddCounterFn = LONG(WINAPI*)(HANDLE, LPCWSTR, DWORD_PTR, HANDLE*);
-    using CollectFn = LONG(WINAPI*)(HANDLE);
-    using GetArrayFn = LONG(WINAPI*)(HANDLE, DWORD, LPDWORD, LPDWORD, PVOID);
-
-    static bool tried = false;
-    static HANDLE query = nullptr;
-    static HANDLE counter = nullptr;
-    static CollectFn collect_fn = nullptr;
-    static GetArrayFn get_array_fn = nullptr;
-
-    if (!tried) {
-        tried = true;
-        if (HMODULE pdh = LoadLibraryW(L"pdh.dll")) {
-            auto open_fn = reinterpret_cast<OpenQueryFn>(GetProcAddress(pdh, "PdhOpenQueryW"));
-            auto add_fn =
-                reinterpret_cast<AddCounterFn>(GetProcAddress(pdh, "PdhAddEnglishCounterW"));
-            collect_fn = reinterpret_cast<CollectFn>(GetProcAddress(pdh, "PdhCollectQueryData"));
-            get_array_fn =
-                reinterpret_cast<GetArrayFn>(GetProcAddress(pdh, "PdhGetFormattedCounterArrayW"));
-            if (open_fn && add_fn && collect_fn && get_array_fn &&
-                open_fn(nullptr, 0, &query) == 0) {
-                if (add_fn(query, L"\\Thermal Zone Information(*)\\Temperature", 0, &counter) ==
-                    0) {
-                    collect_fn(query);
-                } else {
-                    counter = nullptr;
-                }
-            }
-        }
-    }
-    if (!query || !counter || !collect_fn || !get_array_fn) {
-        return -1;
-    }
-    if (collect_fn(query) != 0) {
-        return -1;
-    }
-    DWORD buf_size = 0;
-    DWORD item_count = 0;
-    const LONG rc = get_array_fn(counter, kPdhFmtDouble, &buf_size, &item_count, nullptr);
-    if (rc != kPdhMoreData || buf_size == 0) {
-        return -1;
-    }
-    std::vector<u8> buf(buf_size);
-    if (get_array_fn(counter, kPdhFmtDouble, &buf_size, &item_count, buf.data()) != 0) {
-        return -1;
-    }
-    const auto* items = reinterpret_cast<const PdhItemDoubleW*>(buf.data());
-    double hottest = -1.0;
-    for (DWORD i = 0; i < item_count; ++i) {
-        if (items[i].FmtValue.CStatus != 0) {
-            continue;
-        }
-        const double raw = items[i].FmtValue.doubleValue;
-        const double celsius = raw > 200.0 ? (raw - 273.15) : raw;
-        if (celsius >= 20.0 && celsius <= 115.0) {
-            hottest = std::max(hottest, celsius);
-        }
-    }
-    return hottest > 0.0 ? static_cast<int>(std::lround(hottest)) : -1;
-}
-
 struct NvmlGpuMetrics {
     int util = -1;
     int temp_c = -1;
@@ -426,15 +352,10 @@ QString QueryRamSummary() {
                          : sticks == 3 ? QStringLiteral("Triple Channel")
                          : sticks == 2 ? QStringLiteral("Dual Channel")
                                        : QStringLiteral("Single Channel");
-    const u64 gb = (total_mb + 512) / 1024;
     if (speed_mhz > 0) {
-        return QStringLiteral("%1 GB %2 %3 MHz (%4)")
-            .arg(gb)
-            .arg(type_str)
-            .arg(speed_mhz)
-            .arg(ch_str);
+        return QStringLiteral("%1 %2 MHz (%3)").arg(type_str).arg(speed_mhz).arg(ch_str);
     }
-    return QStringLiteral("%1 GB %2 (%3)").arg(gb).arg(type_str, ch_str);
+    return QStringLiteral("%1 (%2)").arg(type_str, ch_str);
 }
 
 QString BuildHardwareBannerText() {
@@ -674,9 +595,21 @@ void PerformanceOverlay::UpdateStats(const Core::PerfStatsResults& results,
     m_upscale_text = m_main_window->UpscaleStatusText();
     m_frame_gen_text = m_main_window->FrameGenStatusText();
 
-    const auto memory = Common::GetProcessMemoryUsage();
-    const u64 ram = memory.working_set != 0 ? memory.working_set : memory.commit;
-    m_ram_text = ram != 0 ? tr("%1 GB").arg(Gigabytes(ram)) : QString{};
+    m_ram_text.clear();
+#ifdef _WIN32
+    MEMORYSTATUSEX ms{};
+    ms.dwLength = sizeof(ms);
+    if (GlobalMemoryStatusEx(&ms) && ms.ullTotalPhys > 0) {
+        const u64 used_ram =
+            ms.ullTotalPhys > ms.ullAvailPhys ? (ms.ullTotalPhys - ms.ullAvailPhys) : 0ULL;
+        m_ram_text = tr("%1 / %2 GB").arg(Gigabytes(used_ram), Gigabytes(ms.ullTotalPhys));
+    }
+#endif
+    if (m_ram_text.isEmpty()) {
+        const auto memory = Common::GetProcessMemoryUsage();
+        const u64 ram = memory.working_set != 0 ? memory.working_set : memory.commit;
+        m_ram_text = ram != 0 ? tr("%1 GB").arg(Gigabytes(ram)) : QString{};
+    }
     m_vram_text.clear();
     m_vram_share = 0.0;
     if (QtCommon::system != nullptr && QtCommon::system->IsPoweredOn()) {
@@ -697,13 +630,8 @@ void PerformanceOverlay::UpdateStats(const Core::PerfStatsResults& results,
         m_cpu_text = tr("%1%").arg(std::lround(cpu_pct));
     }
     m_cpu_max_core = QueryMaxCpuCorePercent();
-    m_cpu_temp = QueryCpuTempCelsius();
-    if (m_cpu_max_core >= 0 && m_cpu_temp > 0) {
-        m_cpu_core_text = tr("Single Core %1% • %2°C").arg(m_cpu_max_core).arg(m_cpu_temp);
-    } else if (m_cpu_max_core >= 0) {
+    if (m_cpu_max_core >= 0) {
         m_cpu_core_text = tr("Single Core %1%").arg(m_cpu_max_core);
-    } else if (m_cpu_temp > 0) {
-        m_cpu_core_text = tr("%1°C").arg(m_cpu_temp);
     } else {
         m_cpu_core_text.clear();
     }

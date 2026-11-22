@@ -930,8 +930,26 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                 newest_idx = idx;
             }
         }
-        for (int idx = 0; idx < 6; ++idx) {
-            auto& mc = mini_cards[static_cast<size_t>(idx)];
+        std::array<int, 6> order{0, 1, 2, 3, 4, 5};
+        std::stable_sort(order.begin(), order.end(), [&](int a, int b) {
+            const bool ua = used[static_cast<size_t>(a)];
+            const bool ub = used[static_cast<size_t>(b)];
+            if (ua != ub) {
+                return ua;
+            }
+            const QDateTime& ta = times[static_cast<size_t>(a)];
+            const QDateTime& tb = times[static_cast<size_t>(b)];
+            if (ta.isValid() != tb.isValid()) {
+                return ta.isValid();
+            }
+            if (ta.isValid() && tb.isValid() && ta != tb) {
+                return ta > tb;
+            }
+            return a < b;
+        });
+        for (int card_pos = 0; card_pos < 6; ++card_pos) {
+            const int idx = order[static_cast<size_t>(card_pos)];
+            auto& mc = mini_cards[static_cast<size_t>(card_pos)];
             const bool is_used = used[static_cast<size_t>(idx)];
             const bool is_newest = (idx == newest_idx);
             mc.frame->setStyleSheet(

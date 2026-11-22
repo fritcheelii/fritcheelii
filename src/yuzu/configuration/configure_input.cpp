@@ -137,15 +137,16 @@ void ConfigureInput::Initialize(InputCommon::InputSubsystem* input_subsystem,
                 tr("Swaps A↔B and X↔Y on Player 1 controller so physical A confirms (PC style)."));
             connect(swap_btn, &QPushButton::clicked, this,
                     [this]() { player_controllers[0]->SwapFaceButtons(); });
-            connect(combo_oot_button_icons, &QComboBox::activated, this, [this](int index) {
-                if (index == 5 &&
-                    QMessageBox::question(
-                        this, tr("Xbox PC Layout"),
-                        tr("Swap A↔B and X↔Y on Player 1 controller now so physical A confirms "
-                           "(PC style)?")) == QMessageBox::Yes) {
-                    player_controllers[0]->SwapFaceButtons();
-                }
-            });
+            int prev_icon_index = combo_oot_button_icons->currentIndex();
+            connect(combo_oot_button_icons, &QComboBox::activated, this,
+                    [this, prev_icon_index](int index) mutable {
+                        const bool was_pc_xbox = (prev_icon_index == 5);
+                        const bool is_pc_xbox = (index == 5);
+                        if (was_pc_xbox != is_pc_xbox) {
+                            player_controllers[0]->SwapFaceButtons();
+                        }
+                        prev_icon_index = index;
+                    });
             icons_row->addWidget(icons_lbl);
             icons_row->addWidget(combo_oot_button_icons);
             icons_row->addWidget(swap_btn);

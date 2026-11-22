@@ -825,27 +825,6 @@ private:
     };
     boost::container::small_vector<JoinCopy, 4> join_copies_to_do;
     ::Common::unordered_map<ImageId, size_t> join_alias_indices;
-
-    // Fritchii v6.5 Adaptive 4-6 GB VRAM Thrash Guard
-    struct ThrashGhost {
-        GPUVAddr gpu_addr = 0;
-        u64 shape = 0;
-        u64 last_use = 0;
-        bool pressured = false;
-    };
-    static constexpr size_t ThrashGhostSlots = 4096;
-    static constexpr size_t ThrashBuckets = 8;
-    static constexpr u64 ThrashMaxFloor = 600;
-    static u64 ThrashShapeKey(const ImageInfo& info) noexcept;
-    static size_t ThrashSlot(GPUVAddr gpu_addr, u64 shape) noexcept;
-    void NoteThrashDelete(const Image& image, bool pressured);
-    void NoteThrashMade(const ImageInfo& info, GPUVAddr gpu_addr);
-    void TickThrashGuard();
-
-    std::vector<ThrashGhost> thrash_ghosts;
-    std::array<u32, ThrashBuckets> thrash_window{};
-    u64 thrash_floor = 0;
-    u64 thrash_calm_frames = 0;
 };
 
 } // namespace VideoCommon
