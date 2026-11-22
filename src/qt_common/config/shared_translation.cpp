@@ -651,11 +651,11 @@ std::unique_ptr<ComboboxTranslationMap> ComboboxEnumeration(QObject* parent) {
     translations->insert({Settings::EnumMetadata<Settings::OotFsrPreset>::Index(),
                           {
                               PAIR(OotFsrPreset, NativeAa, tr("Native AA")),
-                              PAIR(OotFsrPreset, Native, tr("Native (game's size)")),
-                              PAIR(OotFsrPreset, Quality, tr("Quality")),
-                              PAIR(OotFsrPreset, Balanced, tr("Balanced")),
-                              PAIR(OotFsrPreset, Performance, tr("Performance")),
-                              PAIR(OotFsrPreset, UltraPerformance, tr("Ultra Performance")),
+                              PAIR(OotFsrPreset, Native, tr("Auto / Dynamic (Game Default)")),
+                              PAIR(OotFsrPreset, Quality, tr("Quality (67% Fixed)")),
+                              PAIR(OotFsrPreset, Balanced, tr("Balanced (59% Fixed)")),
+                              PAIR(OotFsrPreset, Performance, tr("Performance (50% Fixed)")),
+                              PAIR(OotFsrPreset, UltraPerformance, tr("Ultra Performance (33% Fixed)")),
                           }});
     translations->insert({Settings::EnumMetadata<Settings::HdrMode>::Index(),
                           {

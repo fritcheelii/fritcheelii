@@ -246,25 +246,45 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
         return value != nullptr ? std::strtoull(value, nullptr, 10) : 300ULL;
     }();
     const bool smart_gc_4gb = Settings::values.test_vram_gc_4gb.GetValue();
+    u64 device_budget = 0;
+    if constexpr (requires { runtime.GetDeviceMemoryBudget(); }) {
+        device_budget = runtime.GetDeviceMemoryBudget();
+    }
+    const bool small_vram = device_budget != 0 && device_budget <= 5_GiB;
     const auto Configure = [&](bool allow_aggressive) {
         high_priority_mode = out_of_memory || used_memory() >= expected_memory;
         aggressive_mode =
             allow_aggressive && (out_of_memory || used_memory() >= critical_memory);
         ticks_to_destroy = aggressive_mode ? 10ULL : high_priority_mode ? 25ULL : 50ULL;
-        if (!out_of_memory && used_memory() < critical_memory + 512_MiB) {
+        if (small_vram) {
+            if (!out_of_memory && used_memory() < critical_memory) {
+                ticks_to_destroy = (std::max)(ticks_to_destroy, (std::min)(min_age, 60ULL));
+            }
+        } else if (!out_of_memory && used_memory() < critical_memory + 512_MiB) {
             ticks_to_destroy = (std::max)(ticks_to_destroy, min_age);
         }
-        // Fritchii v6.2 / v6.5 Adaptive Thrash Guard: keep hot textures alive under 4-6 GB VRAM
-        // pressure so they are not deleted and recreated dozens of times per frame.
-        if (smart_gc_4gb && !out_of_memory) {
-            ticks_to_destroy = (std::max)(ticks_to_destroy, 12ULL);
-        }
-        if (!out_of_memory && thrash_floor > 0) {
+        // Fritchii v6.2 / v6.5 Adaptive Thrash Guard: keep hot textures alive under VRAM pressure
+        // strictly below critical_memory so they are not deleted and recreated dozens of times per
+        // frame, while releasing before OOM (-2) can occur.
+        if (!out_of_memory && thrash_floor > 0 && used_memory() < critical_memory) {
             ticks_to_destroy = (std::max)(ticks_to_destroy, thrash_floor);
         }
         num_iterations = aggressive_mode ? 40 : (high_priority_mode ? 20 : 10);
         if (smart_gc_4gb && high_priority_mode) {
             num_iterations *= 2;
+        }
+        bool over_emergency = false;
+        if (aggressive_mode && used_memory() > critical_memory) {
+            const u64 over = used_memory() - critical_memory;
+            num_iterations += static_cast<size_t>((std::min)(over / 2_MiB, u64{512}));
+            const u64 emergency_threshold = small_vram ? u64{512_MiB} : u64{1_GiB};
+            if (over >= emergency_threshold) {
+                over_emergency = true;
+                ticks_to_destroy = 3ULL;
+            }
+        }
+        if (smart_gc_4gb && !out_of_memory && !over_emergency) {
+            ticks_to_destroy = (std::max)(ticks_to_destroy, 12ULL);
         }
     };
     const auto Cleanup = [&](ImageId image_id) {
@@ -334,10 +354,11 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
     // emptiest blocks go first, so blocks drain and go back to the driver; placement already
     // prefers the fullest blocks (best fit). Images with memory of their own sit in the middle.
     const auto Collect = [&] {
+        const u64 cutoff_tick = frame_tick > ticks_to_destroy ? frame_tick - ticks_to_destroy : 0ULL;
         if constexpr (requires(const Image& image) { image.MemoryBlock(); }) {
             std::vector<ImageId> candidates;
             const size_t limit = num_iterations * 8;
-            lru_cache.ForEachItemBelow(frame_tick - ticks_to_destroy, [&](ImageId image_id) {
+            lru_cache.ForEachItemBelow(cutoff_tick, [&](ImageId image_id) {
                 if (busy(image_id)) {
                     return false;
                 }
@@ -386,14 +407,14 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
                 }
             }
         } else {
-            lru_cache.ForEachItemBelow(frame_tick - ticks_to_destroy, Cleanup);
+            lru_cache.ForEachItemBelow(cutoff_tick, Cleanup);
         }
     };
     // A bad overlap that a newer GPU-written image covers holds nothing a later read can want:
     // delete it after 4 unused frames, without a readback. Ocarina of Time's guard house leaves
     // ~45 a frame (a shadow map sized by the camera moves every target behind it), far more than
     // the age-based pass below frees.
-    if (const u64 bad_overlap_age = (std::max)(u64{4}, min_age); frame_tick > bad_overlap_age) {
+    if (constexpr u64 bad_overlap_age = 4ULL; frame_tick > bad_overlap_age) {
         size_t visits = 512;
         lru_cache.ForEachItemBelow(frame_tick - bad_overlap_age, [&](ImageId image_id) {
             if (visits-- == 0) {
@@ -742,6 +763,8 @@ void TextureCache<P>::TickFrame() {
                     const u32 events = runtime.MemoryPressureEvents();
                     if (events != seen_pressure_events) {
                         seen_pressure_events = events;
+                        thrash_floor = 0;
+                        thrash_window = {};
                         pressure_margin = (std::min)(pressure_margin + 512_MiB, 3_GiB);
                         pressure_quiet_frames = 0;
                         budget_check_frames = 0; // thresholds are recomputed below
@@ -1063,6 +1086,11 @@ void TextureCache<P>::NoteThrashDelete(const Image& image, bool pressured) {
     if (!enabled) {
         return;
     }
+    // Only guard costly sampled textures; never hold transient render targets or depth/shadow maps.
+    if (False(image.flags & ImageFlagBits::CostlyLoad) ||
+        True(image.flags & ImageFlagBits::GpuModified)) {
+        return;
+    }
     if (thrash_ghosts.empty()) {
         thrash_ghosts.resize(ThrashGhostSlots);
     }
@@ -1110,8 +1138,21 @@ void TextureCache<P>::TickThrashGuard() {
     }
     constexpr u64 CheckFrames = 60;
     constexpr u32 MinRemakes = 8;
+    if (total_used_memory >= critical_memory) {
+        thrash_floor = 0;
+        thrash_window = {};
+        return;
+    }
     if (frame_tick % CheckFrames != 0) {
         return;
+    }
+    u64 max_floor = ThrashMaxFloor;
+    u64 budget = 0;
+    if constexpr (requires { runtime.GetDeviceMemoryBudget(); }) {
+        budget = runtime.GetDeviceMemoryBudget();
+        if (budget != 0 && budget <= 5_GiB) {
+            max_floor = 60;
+        }
     }
     const bool pressure = total_used_memory >= expected_memory;
     thrash_calm_frames = pressure ? 0 : thrash_calm_frames + CheckFrames;
@@ -1123,32 +1164,27 @@ void TextureCache<P>::TickThrashGuard() {
             seen += thrash_window[bucket];
             if (seen * 10 >= remakes * 9) {
                 const u64 gap = u64{4} << bucket;
-                wanted = (std::min)(gap + gap / 4 + 2, ThrashMaxFloor);
+                wanted = (std::min)(gap + gap / 4 + 2, max_floor);
                 break;
             }
         }
     }
     thrash_window = {};
-    u64 floor = thrash_floor;
+    u64 floor = (std::min)(thrash_floor, max_floor);
     if (wanted > floor) {
         floor = wanted;
     } else if (thrash_calm_frames >= 600 && floor != 0) {
         floor -= floor / 8 + 1;
     }
-    if (floor != 0) {
-        if constexpr (requires { runtime.GetDeviceMemoryBudget(); }) {
-            const u64 budget = runtime.GetDeviceMemoryBudget();
-            if (budget != 0) {
-                u64 bytes = 0;
-                for (const auto [image_id, image] : slot_images) {
-                    if (False(image->flags & ImageFlagBits::Unbacked)) {
-                        bytes += ImageMemoryBytes(*image);
-                    }
-                }
-                if (bytes > budget / 4 * 3) {
-                    floor /= 2;
-                }
+    if (floor != 0 && budget != 0) {
+        u64 bytes = 0;
+        for (const auto [image_id, image] : slot_images) {
+            if (False(image->flags & ImageFlagBits::Unbacked)) {
+                bytes += ImageMemoryBytes(*image);
             }
+        }
+        if (bytes > budget / 2) {
+            floor /= 2;
         }
     }
     thrash_floor = floor;

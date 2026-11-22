@@ -100,6 +100,7 @@ private:
     QString m_gpu_detail_text;
     int m_gpu_util = -1;
     int m_gpu_temp = -1;
+    int m_cpu_temp = -1;
     int m_cpu_max_core = -1;
     int m_limit_kind = 0; // 0=normal/capped, 1=cpu, 2=gpu, 3=vram
     bool m_show_details = true;

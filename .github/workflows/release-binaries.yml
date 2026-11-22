@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           retry() { local n; for n in 1 2 3 4; do "$@" && return 0; echo "::warning::attempt $n of '$*' failed; retrying" >&2; sleep $((n * 30)); done; return 1; }
-          tag="v5.0"
+          tag="v5.1"
           if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/$tag" >/dev/null 2>&1; then
             retry gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/$tag" \
               -f "sha=$GITHUB_SHA" -F "force=true"
@@ -218,12 +218,12 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path "build/release/bin/cheezyemu.exe") {
-            Move-Item -Force "build/release/bin/cheezyemu.exe" "build/release/bin/FritCheeLii v5.0.exe"
+            Move-Item -Force "build/release/bin/cheezyemu.exe" "build/release/bin/FritCheeLii v5.1.exe"
           }
-          if (-not (Test-Path "build/release/bin/FritCheeLii v5.0.exe")) {
-            throw "build/release/bin/FritCheeLii v5.0.exe was not produced"
+          if (-not (Test-Path "build/release/bin/FritCheeLii v5.1.exe")) {
+            throw "build/release/bin/FritCheeLii v5.1.exe was not produced"
           }
-          windeployqt --release --no-translations "build/release/bin/FritCheeLii v5.0.exe"
+          windeployqt --release --no-translations "build/release/bin/FritCheeLii v5.1.exe"
 
       - name: Upload Windows binary
         uses: actions/upload-artifact@v7
@@ -245,15 +245,15 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: FritCheeLii-windows-x86_64-pgo-${{ github.sha }}
-          path: "stage/FritCheeLii v5.0"
+          path: "stage/FritCheeLii v5.1"
 
       - name: Package release files
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
-          test -f "stage/FritCheeLii v5.0/FritCheeLii v5.0.exe"
-          (cd stage && zip -qr "${GITHUB_WORKSPACE}/dist/FritCheeLii-v5.0.zip" "FritCheeLii v5.0")
+          test -f "stage/FritCheeLii v5.1/FritCheeLii v5.1.exe"
+          (cd stage && zip -qr "${GITHUB_WORKSPACE}/dist/FritCheeLii-v5.1.zip" "FritCheeLii v5.1")
           ls -la dist
 
       - name: Create release
@@ -263,7 +263,7 @@ jobs:
         run: |
           set -euo pipefail
           retry() { local n; for n in 1 2 3 4; do "$@" && return 0; echo "::warning::attempt $n of '$*' failed; retrying" >&2; sleep $((n * 30)); done; return 1; }
-          tag="v5.0"
+          tag="v5.1"
           tag_sha=$(retry gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" --jq '.object.sha')
           if [ "$tag_sha" != "$GITHUB_SHA" ]; then
             echo "Release tag ${tag} points to $tag_sha instead of $GITHUB_SHA"
@@ -271,14 +271,20 @@ jobs:
           fi
           base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}"
           cat > notes.md <<EOF
-          # FritCheeLii v5.0
+          # FritCheeLii v5.1
 
           ## Download (Windows 64-bit · Clang 22.1.8 + ThinLTO + PGO)
-          - **[FritCheeLii-v5.0.zip](${base}/FritCheeLii-v5.0.zip)**
+          - **[FritCheeLii-v5.1.zip](${base}/FritCheeLii-v5.1.zip)**
 
-          Extraia o arquivo \`FritCheeLii-v5.0.zip\` — ele criará a pasta **\`FritCheeLii v5.0\`** contendo o executável **\`FritCheeLii v5.0.exe\`**.
+          Extraia o arquivo \`FritCheeLii-v5.1.zip\` — ele criará a pasta **\`FritCheeLii v5.1\`** contendo o executável **\`FritCheeLii v5.1.exe\`**.
 
-          ## What's New in v5.0
+          ## What's New in v5.1
+          - **Proactive 4 GB VRAM & Castle Town Fix:** restores 4-frame sweep for superseded \`BadOverlap\` shadow maps, caps small-GPU \`min_age\` at \`60\` frames strictly below \`critical_memory\`, adds Fritchii \`COLLECT_OVER\` GC scaling, and filters \`ThrashGuard\` to \`CostlyLoad\` textures only (stopping before \`critical_memory\`)
+          - **CPU Temperature in \`PerformanceOverlay\`:** displays live CPU temperature (\`°C\`) alongside \`CPU Single Core %\`
+          - **Triforce-Style 6-Thumbnail Grid in \`Saves\`:** displays all 6 in-game files (\`File 1 Manual\` + \`Files 2–6 Auto\`) with location thumbnails and newest highlight
+          - **Synced \`Auto / Dynamic\` Label** in \`Settings → Graphics\` as well as the \`GRAPHICS\` status button
+
+          ## Highlights from v5.0
           - **Fritchii v6.5 Adaptive 4–6 GB VRAM Thrash Guard:** prevents texture deletion/re-creation churn under tight VRAM and skips un-evictable GC entries
           - **Zelda OoT Multi-Save Manager (8 Slots) + Triforce Save System:** live location thumbnail preview (\`caption.sav\`), Switch/Snapshot/Rename/Export, and cross-emulator auto-detection (Triforce/Hookshot, AkynoLeyend, NX2Saria/NX2navi, Ryujinx, Eden, Lichii, Yuzu)
           - **Benchmark-Grade PerformanceOverlay:** dynamic top hardware banner (\`CPU | GPU | RAM DDRx MHz Channel\`), \`CPU Single Core %\` + \`GPU W • °C\`, and \`Limited by 1 Core\` detection
@@ -296,5 +302,5 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --verify-tag \
             --prerelease \
-            --title "FritCheeLii v5.0" \
+            --title "FritCheeLii v5.1" \
             --notes-file notes.md

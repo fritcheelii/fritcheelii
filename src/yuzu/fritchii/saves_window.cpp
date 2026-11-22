@@ -731,7 +731,7 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
     QDialog dialog(parent);
     dialog.setWindowTitle(QObject::tr("Saves"));
     dialog.setWindowFlag(Qt::WindowContextHelpButtonHint, false);
-    dialog.setMinimumWidth(740);
+    dialog.setMinimumWidth(840);
     QFont big = dialog.font();
     if (big.pointSizeF() > 0) {
         big.setPointSizeF(big.pointSizeF() * 1.12);
@@ -796,23 +796,15 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
     split->setSpacing(14);
 
     auto* slot_list = new QListWidget(&dialog);
-    slot_list->setFixedHeight(248);
-    split->addWidget(slot_list, 3);
+    slot_list->setFixedHeight(272);
+    split->addWidget(slot_list, 2);
 
     auto* preview_card = new QFrame(&dialog);
     preview_card->setStyleSheet(QStringLiteral(
         "QFrame { background-color: #16161c; border: 1px solid #2c2c38; border-radius: 10px; }"));
     auto* preview_layout = new QVBoxLayout(preview_card);
-    preview_layout->setContentsMargins(12, 12, 12, 12);
-    preview_layout->setSpacing(8);
-
-    auto* preview_img = new QLabel(preview_card);
-    preview_img->setFixedSize(256, 144);
-    preview_img->setAlignment(Qt::AlignCenter);
-    preview_img->setStyleSheet(QStringLiteral(
-        "background-color: #0e0e13; border: 1px solid #252530; border-radius: 8px; "
-        "color: #777784; font-size: 11px;"));
-    preview_layout->addWidget(preview_img, 0, Qt::AlignHCenter);
+    preview_layout->setContentsMargins(12, 10, 12, 10);
+    preview_layout->setSpacing(6);
 
     auto* preview_title = new QLabel(preview_card);
     preview_title->setWordWrap(true);
@@ -825,9 +817,41 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
     preview_meta->setStyleSheet(
         QStringLiteral("border: none; color: #9a9aa8; font-size: 11px;"));
     preview_layout->addWidget(preview_meta);
+
+    struct MiniCard {
+        QFrame* frame = nullptr;
+        QLabel* img = nullptr;
+        QLabel* cap = nullptr;
+    };
+    std::array<MiniCard, 6> mini_cards{};
+    auto* thumb_grid = new QGridLayout;
+    thumb_grid->setHorizontalSpacing(8);
+    thumb_grid->setVerticalSpacing(8);
+    for (int idx = 0; idx < 6; ++idx) {
+        auto* frame = new QFrame(preview_card);
+        frame->setStyleSheet(QStringLiteral(
+            "QFrame { background-color: #0e0e13; border: 1px solid #252530; border-radius: 6px; }"));
+        auto* fv = new QVBoxLayout(frame);
+        fv->setContentsMargins(4, 4, 4, 4);
+        fv->setSpacing(3);
+        auto* img = new QLabel(frame);
+        img->setFixedSize(136, 76);
+        img->setAlignment(Qt::AlignCenter);
+        img->setStyleSheet(QStringLiteral(
+            "border: none; background-color: #0a0a0e; color: #686876; font-size: 10px;"));
+        auto* cap = new QLabel(frame);
+        cap->setAlignment(Qt::AlignCenter);
+        cap->setStyleSheet(
+            QStringLiteral("border: none; color: #b4b4c2; font-size: 10px;"));
+        fv->addWidget(img, 0, Qt::AlignHCenter);
+        fv->addWidget(cap);
+        thumb_grid->addWidget(frame, idx / 3, idx % 3);
+        mini_cards[static_cast<size_t>(idx)] = {frame, img, cap};
+    }
+    preview_layout->addLayout(thumb_grid);
     preview_layout->addStretch(1);
 
-    split->addWidget(preview_card, 2);
+    split->addWidget(preview_card, 3);
     layout->addLayout(split, row++, 0, 1, 2);
 
     const auto slot_inspect_dir = [&](int slot_idx, int active) {
@@ -844,42 +868,92 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
 
     const auto update_preview = [&] {
         const int sel = slot_list->currentRow() + 1;
+        const auto reset_grid = [&](const QString& msg) {
+            for (int idx = 0; idx < 6; ++idx) {
+                auto& mc = mini_cards[static_cast<size_t>(idx)];
+                mc.frame->setStyleSheet(QStringLiteral(
+                    "QFrame { background-color: #0e0e13; border: 1px solid #252530; border-radius: 6px; }"));
+                mc.img->setPixmap(QPixmap{});
+                mc.img->setText(msg);
+                mc.cap->setText(idx == 0 ? QObject::tr("File 1 (Manual)")
+                                         : QObject::tr("File %1 (Auto)").arg(idx + 1));
+            }
+        };
         if (sel < 1 || sel > 8) {
-            preview_img->setPixmap(QPixmap{});
-            preview_img->setText(QObject::tr("Select a slot"));
             preview_title->setText(QString{});
             preview_meta->setText(QString{});
+            reset_grid(QObject::tr("Empty"));
             return;
         }
         const int active = ReadActiveSlot(slots_root);
         const fs::path sdir = slots_root / fmt::format("slot_{}", sel);
         const SlotMeta meta = ReadSlotMeta(sdir, sel);
-        const OotSaveSummary sum = InspectOotSaveDir(slot_inspect_dir(sel, active), true);
+        const fs::path inspect_dir = slot_inspect_dir(sel, active);
+        const OotSaveSummary sum = InspectOotSaveDir(inspect_dir, false);
 
         const QString badge = (sel == active) ? QObject::tr(" [ACTIVE]") : QString{};
         preview_title->setText(QObject::tr("Slot %1 — %2%3").arg(sel).arg(meta.name, badge));
 
         if (!sum.has_data) {
-            preview_img->setPixmap(QPixmap{});
-            preview_img->setText(QObject::tr("Empty slot"));
             preview_meta->setText(QObject::tr("No campaign data in this slot yet."));
+            reset_grid(QObject::tr("Empty"));
             return;
-        }
-
-        if (!sum.preview.isNull()) {
-            preview_img->setText(QString{});
-            preview_img->setPixmap(RoundedThumbnail(sum.preview, 256, 144, 8));
-        } else {
-            preview_img->setPixmap(QPixmap{});
-            preview_img->setText(QObject::tr("No location preview"));
         }
 
         const QString date_str =
             sum.newest_time.isValid() ? FormatSaveDate(sum.newest_time) : meta.updated;
         preview_meta->setText(
-            QObject::tr("%1 / 6 in-game files (1 manual + 5 auto)\nLast saved: %2")
+            QObject::tr("%1 / 6 in-game files (1 manual + 5 auto)  •  Last saved: %2")
                 .arg(sum.used_files)
                 .arg(date_str.isEmpty() ? QObject::tr("Saved") : date_str));
+
+        int newest_idx = -1;
+        QDateTime newest_dt;
+        std::array<bool, 6> used{};
+        std::array<QDateTime, 6> times{};
+        std::array<QPixmap, 6> pics{};
+        std::error_code ec;
+        for (int idx = 0; idx < 6; ++idx) {
+            const fs::path fdir = inspect_dir / fmt::format("slot_{:02d}", idx);
+            const fs::path prog = fdir / "progress.sav";
+            const fs::path cap_file = fdir / "caption.sav";
+            used[static_cast<size_t>(idx)] = fs::is_regular_file(prog, ec);
+            if (fs::is_regular_file(cap_file, ec)) {
+                pics[static_cast<size_t>(idx)] = ExtractCaptionPixmap(cap_file);
+                times[static_cast<size_t>(idx)] = QFileInfo(Text(cap_file)).lastModified();
+            } else if (used[static_cast<size_t>(idx)]) {
+                times[static_cast<size_t>(idx)] = QFileInfo(Text(prog)).lastModified();
+            }
+            if (used[static_cast<size_t>(idx)] && times[static_cast<size_t>(idx)].isValid() &&
+                (!newest_dt.isValid() || times[static_cast<size_t>(idx)] > newest_dt)) {
+                newest_dt = times[static_cast<size_t>(idx)];
+                newest_idx = idx;
+            }
+        }
+        for (int idx = 0; idx < 6; ++idx) {
+            auto& mc = mini_cards[static_cast<size_t>(idx)];
+            const bool is_used = used[static_cast<size_t>(idx)];
+            const bool is_newest = (idx == newest_idx);
+            mc.frame->setStyleSheet(
+                is_newest
+                    ? QStringLiteral("QFrame { background-color: #161422; border: 1.5px solid #a78bfa; border-radius: 6px; }")
+                    : QStringLiteral("QFrame { background-color: #0e0e13; border: 1px solid #252530; border-radius: 6px; }"));
+            const QPixmap& pix = pics[static_cast<size_t>(idx)];
+            if (!pix.isNull()) {
+                mc.img->setText(QString{});
+                mc.img->setPixmap(RoundedThumbnail(pix, 136, 76, 5));
+            } else {
+                mc.img->setPixmap(QPixmap{});
+                mc.img->setText(is_used ? QObject::tr("No preview") : QObject::tr("Empty"));
+            }
+            const QString tag =
+                idx == 0 ? QObject::tr("F1 Manual") : QObject::tr("F%1 Auto").arg(idx + 1);
+            const QDateTime& dt = times[static_cast<size_t>(idx)];
+            const QString stamp = dt.isValid()
+                                      ? dt.toString(QStringLiteral("MM-dd HH:mm"))
+                                      : (is_used ? QObject::tr("Saved") : QObject::tr("Empty"));
+            mc.cap->setText(QStringLiteral("%1 • %2").arg(tag, stamp));
+        }
     };
 
     const auto refresh_slots = [&] {
