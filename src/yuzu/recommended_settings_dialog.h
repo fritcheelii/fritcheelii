@@ -13,6 +13,17 @@ class RecommendedSettingsDialog {
     Q_DECLARE_TR_FUNCTIONS(RecommendedSettingsDialog)
 
 public:
+    enum class PresetChoice : int {
+        Cancel = -1,
+        Auto = 0,
+        Entry4GB = 1,
+        Mid8GB = 2,
+        High16GB = 3,
+    };
+
+    /// Asks whether to use the recommended settings (or a chosen tier) for `host_text`.
+    static PresetChoice ChoosePreset(QWidget* parent, const QString& host_text);
+
     /// Asks whether to use the recommended settings for the PC `host_text` describes. True when
     /// the user accepts.
     static bool Ask(QWidget* parent, const QString& host_text);

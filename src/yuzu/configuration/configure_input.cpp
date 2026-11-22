@@ -10,6 +10,8 @@
 #include <QComboBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMessageBox>
+#include <QPushButton>
 #include <QVBoxLayout>
 
 #include "common/settings.h"
@@ -118,16 +120,35 @@ void ConfigureInput::Initialize(InputCommon::InputSubsystem* input_subsystem,
             icons_row->setContentsMargins(6, 2, 6, 2);
             auto* icons_lbl = new QLabel(tr("Button Icons (Zelda OoT):"), player_tabs[i]);
             combo_oot_button_icons = new QComboBox(player_tabs[i]);
-            combo_oot_button_icons->addItems({tr("Switch (Default)"), tr("Xbox"), tr("PlayStation"),
-                                              tr("PC (Keyboard/Mouse)"), tr("Steam Deck")});
+            combo_oot_button_icons->addItems({tr("Switch (Default)"),
+                                              tr("Xbox (Nintendo Layout)"),
+                                              tr("PlayStation"),
+                                              tr("PC (Keyboard/Mouse)"),
+                                              tr("Steam Deck"),
+                                              tr("Xbox (PC Layout — A Confirm)")});
             combo_oot_button_icons->setToolTip(
                 tr("Selects on-screen controller button prompts from "
                    "user/load/0400486024DEC000/button_icons/<style>. Requires game restart."));
             const int cur_icons = Settings::values.oot_button_icons.GetValue();
             combo_oot_button_icons->setCurrentIndex(
                 cur_icons >= 0 && cur_icons < combo_oot_button_icons->count() ? cur_icons : 0);
+            auto* swap_btn = new QPushButton(tr("Swap A↔B / X↔Y"), player_tabs[i]);
+            swap_btn->setToolTip(
+                tr("Swaps A↔B and X↔Y on Player 1 controller so physical A confirms (PC style)."));
+            connect(swap_btn, &QPushButton::clicked, this,
+                    [this]() { player_controllers[0]->SwapFaceButtons(); });
+            connect(combo_oot_button_icons, &QComboBox::activated, this, [this](int index) {
+                if (index == 5 &&
+                    QMessageBox::question(
+                        this, tr("Xbox PC Layout"),
+                        tr("Swap A↔B and X↔Y on Player 1 controller now so physical A confirms "
+                           "(PC style)?")) == QMessageBox::Yes) {
+                    player_controllers[0]->SwapFaceButtons();
+                }
+            });
             icons_row->addWidget(icons_lbl);
             icons_row->addWidget(combo_oot_button_icons);
+            icons_row->addWidget(swap_btn);
             icons_row->addStretch(1);
             tab_layout->addLayout(icons_row);
             tab_layout->addWidget(player_controllers[i]);

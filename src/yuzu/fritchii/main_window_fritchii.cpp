@@ -3,8 +3,11 @@
 
 // MainWindow's Fritchii minimalist UI setup on top of CheezyEmu 12's engine.
 
+#include <QActionGroup>
 #include <QApplication>
+#include <QMenu>
 #include <QMessageBox>
+#include <QPoint>
 #include <QPushButton>
 #include <QStatusBar>
 
@@ -91,25 +94,57 @@ void MainWindow::SetUpFritchiiUi() {
     };
     statusBar()->insertPermanentWidget(0, FritchiiUi::MakeGraphicsButton(this, graphics));
 
-    // Ocarina of Time 60 FPS / 30 FPS live toggle button right next to GRAPHICS.
+    // Ocarina of Time live FPS cap selector (30 / 40 / 45 / 50 / 55 / 60 FPS) right next to GRAPHICS.
     auto* const oot_fps_button = new QPushButton(this);
     oot_fps_button->setObjectName(QStringLiteral("OotFpsStatusBarButton"));
     oot_fps_button->setCheckable(true);
     oot_fps_button->setFocusPolicy(Qt::NoFocus);
     oot_fps_button->setToolTip(
-        tr("Ocarina of Time frame rate. Click to switch between 60 FPS and "
-           "30 FPS (lower-end PCs); it takes effect at once."));
-    const auto update_oot_fps = [oot_fps_button]() {
-        const bool fps30 = Settings::values.oot_30fps.GetValue();
-        oot_fps_button->setChecked(fps30);
-        oot_fps_button->setText(fps30 ? QObject::tr("30 FPS") : QObject::tr("60 FPS"));
+        tr("Ocarina of Time frame rate cap. Click to choose 30, 40, 45, 50, 55, or 60 FPS "
+           "(takes effect live)."));
+    const auto current_oot_fps = []() -> u32 {
+        if (Settings::values.oot_30fps.GetValue()) {
+            return 30;
+        }
+        const u32 limit = Settings::values.fps_limit.GetValue();
+        return limit > 0 ? limit : 60;
+    };
+    const auto update_oot_fps = [oot_fps_button, current_oot_fps]() {
+        const u32 fps = current_oot_fps();
+        oot_fps_button->setChecked(fps < 60);
+        oot_fps_button->setText(QObject::tr("%1 FPS").arg(fps));
     };
     update_oot_fps();
-    connect(oot_fps_button, &QPushButton::clicked, this, [this, update_oot_fps]() {
-        Settings::values.oot_30fps.SetValue(!Settings::values.oot_30fps.GetValue());
-        update_oot_fps();
-        OnSaveConfig();
-    });
+    connect(oot_fps_button, &QPushButton::clicked, this,
+            [this, oot_fps_button, current_oot_fps, update_oot_fps]() {
+                update_oot_fps();
+                QMenu menu(this);
+                auto* group = new QActionGroup(&menu);
+                group->setExclusive(true);
+                const u32 active_fps = current_oot_fps();
+                for (const int fps : {30, 40, 45, 50, 55, 60}) {
+                    QAction* act = menu.addAction(QObject::tr("%1 FPS").arg(fps));
+                    act->setCheckable(true);
+                    act->setChecked(static_cast<u32>(fps) == active_fps);
+                    group->addAction(act);
+                    connect(act, &QAction::triggered, this, [this, fps, update_oot_fps]() {
+                        if (fps == 30) {
+                            Settings::values.oot_30fps.SetValue(true);
+                            Settings::values.fps_limit.SetValue(0);
+                        } else if (fps == 60) {
+                            Settings::values.oot_30fps.SetValue(false);
+                            Settings::values.fps_limit.SetValue(0);
+                        } else {
+                            Settings::values.oot_30fps.SetValue(false);
+                            Settings::values.fps_limit.SetValue(static_cast<u32>(fps));
+                        }
+                        update_oot_fps();
+                        OnSaveConfig();
+                    });
+                }
+                menu.exec(
+                    oot_fps_button->mapToGlobal(QPoint(0, -menu.sizeHint().height())));
+            });
     statusBar()->insertPermanentWidget(1, oot_fps_button);
 
     // Fritchii Home screen + left slim icon rail + top-right Saves & Credits buttons.

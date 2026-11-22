@@ -25,6 +25,8 @@ class MainWindow;
 // keeps the original UI and merges stay clean. Shared files only call in here.
 namespace FritchiiUi {
 
+inline constexpr const char* Version = "v5.0";
+
 /// Fritchii builds (g_build_name "Fritchii"). FRITCHII_CLASSIC_UI=1 shows the original UI.
 [[nodiscard]] bool Enabled();
 

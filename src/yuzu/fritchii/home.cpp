@@ -333,13 +333,15 @@ QWidget* Home::MakePage() {
     credits->setFocusPolicy(Qt::NoFocus);
     connect(credits, &QPushButton::clicked, this, [this] {
         QMessageBox::information(
-            window, tr("FritCheeLii v1.0 - Credits"),
-            tr("<b>FritCheeLii v1.0</b><br><br>"
+            window, tr("Credits"),
+            tr("<b>FritCheeLii %1</b><br><br>"
                "Credits to the open-source projects that made this build possible:<br><br>"
-               "• <b>Fritchii (Frizti)</b>: Graphite UI, Home Screen, In-Game Controls, Bottleneck PerfOverlay, 3rd GPU Render Thread & Shared JIT Cache.<br>"
+               "• <b>Fritchii v6.5 (Frizti & Bakemono)</b>: Graphite UI, Home Screen, In-Game Controls, Bottleneck PerfOverlay, 3rd GPU Render Thread, Shared JIT Cache & Adaptive 4–6 GB VRAM Thrash Guard.<br>"
                "• <b>CheezyEmu (CheezerWheezer)</b>: Idle Buffer Garbage Collector, Fast Shader Loading & Ocarina of Time PGO Profile.<br>"
                "• <b>Lichii (zortos293)</b>: Switch 2 NX2 Core & Expanded 4-Tonemap Neural AA Bypass.<br>"
-               "• <b>Eden / Yuzu & Dark</b>: Upstream Emulator Foundations & Dynamic FPS."));
+               "• <b>Triforce</b>: Save Location Thumbnail Extraction & Cross-Emulator Save Detection.<br>"
+               "• <b>Eden / Yuzu & Dark</b>: Upstream Emulator Foundations & Dynamic FPS.")
+                .arg(QString::fromLatin1(FritchiiUi::Version)));
     });
     links->addWidget(credits);
     layout->addLayout(links);

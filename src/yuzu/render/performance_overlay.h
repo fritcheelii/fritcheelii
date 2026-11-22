@@ -58,7 +58,7 @@ private:
     };
 
     struct Cell {
-        enum class Kind { Fps, Frame, Graph, CpuGpu, Status, Memory };
+        enum class Kind { Fps, Frame, Graph, CpuGpu, Status, Memory, Details };
         Kind kind;
         int x;
         int width;
@@ -96,8 +96,15 @@ private:
     QString m_gpu_ms_text{QStringLiteral("n/a")};
     QString m_gpu_busy_text;
     QString m_limit_text;
+    QString m_cpu_core_text;
+    QString m_gpu_detail_text;
     int m_gpu_util = -1;
+    int m_gpu_temp = -1;
+    int m_cpu_max_core = -1;
     int m_limit_kind = 0; // 0=normal/capped, 1=cpu, 2=gpu, 3=vram
+    bool m_show_details = true;
+    bool m_show_hw_banner = true;
+    QString m_hw_banner_text;
 
     /// Frame rates of the last minute (two samples a second), oldest first.
     static constexpr size_t HistorySize = 120;

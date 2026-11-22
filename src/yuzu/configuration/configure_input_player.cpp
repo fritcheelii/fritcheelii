@@ -1012,6 +1012,18 @@ void ConfigureInputPlayer::ClearAll() {
     UpdateInputDevices();
 }
 
+void ConfigureInputPlayer::SwapFaceButtons() {
+    const auto a = emulated_controller->GetButtonParam(Settings::NativeButton::A);
+    const auto b = emulated_controller->GetButtonParam(Settings::NativeButton::B);
+    const auto x = emulated_controller->GetButtonParam(Settings::NativeButton::X);
+    const auto y = emulated_controller->GetButtonParam(Settings::NativeButton::Y);
+    emulated_controller->SetButtonParam(Settings::NativeButton::A, b);
+    emulated_controller->SetButtonParam(Settings::NativeButton::B, a);
+    emulated_controller->SetButtonParam(Settings::NativeButton::X, y);
+    emulated_controller->SetButtonParam(Settings::NativeButton::Y, x);
+    UpdateUI();
+}
+
 void ConfigureInputPlayer::UpdateUI() {
     for (int button = 0; button < Settings::NativeButton::NumButtons; ++button) {
         const Common::ParamPackage param = emulated_controller->GetButtonParam(button);

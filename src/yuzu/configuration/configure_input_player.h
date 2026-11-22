@@ -74,6 +74,9 @@ public:
     /// Clear all input configuration.
     void ClearAll();
 
+    /// Swap A<->B and X<->Y face buttons for PC/Xbox layout.
+    void SwapFaceButtons();
+
 signals:
     /// Emitted when this controller is (dis)connected by the user.
     void Connected(bool connected);

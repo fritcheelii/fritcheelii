@@ -322,7 +322,7 @@ void RestructureMenus(Ui::MainWindow& ui, QMainWindow& window, const MenuHooks& 
     Rename(ui.action_Firmware_From_Folder, tr("From &Folder..."));
     Rename(ui.action_Firmware_From_ZIP, tr("From &ZIP..."));
     Rename(ui.action_Restore_Previous_Settings, tr("&Restore Default Settings"));
-    Rename(ui.action_About, tr("&About FritCheeLii v4.2"));
+    Rename(ui.action_About, tr("&About"));
     Rename(ui.action_Eden_Dependencies, tr("&Open-Source Components"));
 }
 
@@ -350,12 +350,20 @@ QPushButton* MakeGraphicsButton(QWidget* parent, GraphicsHooks hooks) {
             }
         };
 
+        bool max_res_enabled = true;
+        if (const auto it = Settings::values.disabled_addons.find(0x0400486024DEC000ULL);
+            it != Settings::values.disabled_addons.end()) {
+            max_res_enabled = std::ranges::find(it->second, "Max Resolution (built-in)") ==
+                              it->second.end();
+        }
         std::map<Settings::OotFsrPreset, QString> oot_fsr_choices{
-            {Settings::OotFsrPreset::Native, QObject::tr("Native (100%)")},
-            {Settings::OotFsrPreset::Quality, QObject::tr("Quality (67%)")},
-            {Settings::OotFsrPreset::Balanced, QObject::tr("Balanced (59%)")},
-            {Settings::OotFsrPreset::Performance, QObject::tr("Performance (50%)")},
-            {Settings::OotFsrPreset::UltraPerformance, QObject::tr("Ultra Performance (33%)")},
+            {Settings::OotFsrPreset::Native,
+             max_res_enabled ? QObject::tr("Fixed Max (Max Resolution On)")
+                             : QObject::tr("Auto / Dynamic (Game Default)")},
+            {Settings::OotFsrPreset::Quality, QObject::tr("Quality (67% Fixed)")},
+            {Settings::OotFsrPreset::Balanced, QObject::tr("Balanced (59% Fixed)")},
+            {Settings::OotFsrPreset::Performance, QObject::tr("Performance (50% Fixed)")},
+            {Settings::OotFsrPreset::UltraPerformance, QObject::tr("Ultra Performance (33% Fixed)")},
         };
         add_choices(
             QObject::tr("OoT &FSR Preset (Restart)"), oot_fsr_choices,
@@ -408,7 +416,7 @@ QPushButton* MakeGraphicsButton(QWidget* parent, GraphicsHooks hooks) {
         std::map<Settings::OotAntiAliasing, QString> oot_aa_choices{
             {Settings::OotAntiAliasing::Game, QObject::tr("Game Sharpening")},
             {Settings::OotAntiAliasing::NoSharpening,
-             QObject::tr("No Sharpening (+20% FPS Bypass)")},
+             QObject::tr("No Sharpening (Faster, Recommended)")},
         };
         add_choices(
             QObject::tr("OoT &Sharpening / Neural AA"), oot_aa_choices,

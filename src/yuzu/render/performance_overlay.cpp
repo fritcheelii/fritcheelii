@@ -3,7 +3,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <utility>
+#include <vector>
 
 #include <QActionGroup>
 #include <QContextMenuEvent>
@@ -14,6 +16,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QStatusBar>
+#include <QStringList>
 #include <QWindow>
 
 #include "common/logging.h"
@@ -35,6 +38,7 @@
 namespace {
 constexpr int FullHeight = 54;
 constexpr int CompactHeight = 42;
+constexpr int HeaderHeight = 20;
 constexpr int Edge = 5;    // the gold edge on the left
 constexpr int Pad = 12;    // around the cells
 constexpr int Gap = 14;    // between cells, with a hairline in the middle
@@ -80,7 +84,67 @@ double QuerySystemCpuPercent() {
                       0.0, 100.0);
 }
 
-int QueryNvmlGpuUtil() {
+int QueryMaxCpuCorePercent() {
+    struct ProcPerfInfo {
+        LARGE_INTEGER IdleTime;
+        LARGE_INTEGER KernelTime;
+        LARGE_INTEGER UserTime;
+        LARGE_INTEGER DpcTime;
+        LARGE_INTEGER InterruptTime;
+        ULONG InterruptCount;
+    };
+    using NtQuerySysInfoFn = LONG(WINAPI*)(ULONG, PVOID, ULONG, PULONG);
+    static NtQuerySysInfoFn nt_query = []() -> NtQuerySysInfoFn {
+        if (HMODULE ntdll = GetModuleHandleW(L"ntdll.dll")) {
+            return reinterpret_cast<NtQuerySysInfoFn>(
+                GetProcAddress(ntdll, "NtQuerySystemInformation"));
+        }
+        return nullptr;
+    }();
+    if (!nt_query) {
+        return -1;
+    }
+    SYSTEM_INFO si{};
+    GetSystemInfo(&si);
+    const ULONG ncpu = std::clamp<ULONG>(si.dwNumberOfProcessors, 1, 256);
+    std::vector<ProcPerfInfo> cur(ncpu);
+    ULONG ret_len = 0;
+    if (nt_query(8 /* SystemProcessorPerformanceInformation */, cur.data(),
+                 static_cast<ULONG>(cur.size() * sizeof(ProcPerfInfo)), &ret_len) != 0) {
+        return -1;
+    }
+    const std::size_t count =
+        std::min<std::size_t>(cur.size(), ret_len / sizeof(ProcPerfInfo));
+    static std::vector<ProcPerfInfo> prev;
+    if (prev.size() != count) {
+        prev.assign(cur.begin(), cur.begin() + count);
+        return -1;
+    }
+    double max_pct = -1.0;
+    for (std::size_t i = 0; i < count; ++i) {
+        const s64 idle_d = cur[i].IdleTime.QuadPart - prev[i].IdleTime.QuadPart;
+        const s64 kernel_d = cur[i].KernelTime.QuadPart - prev[i].KernelTime.QuadPart;
+        const s64 user_d = cur[i].UserTime.QuadPart - prev[i].UserTime.QuadPart;
+        const s64 total_d = kernel_d + user_d;
+        if (total_d > 0) {
+            const double pct = std::clamp(
+                100.0 * static_cast<double>(total_d - idle_d) / static_cast<double>(total_d),
+                0.0, 100.0);
+            max_pct = std::max(max_pct, pct);
+        }
+    }
+    prev.assign(cur.begin(), cur.begin() + count);
+    return max_pct >= 0.0 ? static_cast<int>(std::lround(max_pct)) : -1;
+}
+
+struct NvmlGpuMetrics {
+    int util = -1;
+    int temp_c = -1;
+    int power_w = -1;
+    QString name;
+};
+
+NvmlGpuMetrics QueryNvmlGpuMetrics(bool want_name = false) {
     struct NvmlUtil {
         unsigned int gpu;
         unsigned int memory;
@@ -88,9 +152,15 @@ int QueryNvmlGpuUtil() {
     using InitFn = int (*)();
     using GetDevFn = int (*)(unsigned int, void**);
     using GetUtilFn = int (*)(void*, NvmlUtil*);
+    using GetTempFn = int (*)(void*, unsigned int, unsigned int*);
+    using GetPowerFn = int (*)(void*, unsigned int*);
+    using GetNameFn = int (*)(void*, char*, unsigned int);
     static bool tried = false;
     static void* dev = nullptr;
     static GetUtilFn get_util = nullptr;
+    static GetTempFn get_temp = nullptr;
+    static GetPowerFn get_power = nullptr;
+    static GetNameFn get_name = nullptr;
     if (!tried) {
         tried = true;
         HMODULE mod = LoadLibraryW(L"nvml.dll");
@@ -107,6 +177,11 @@ int QueryNvmlGpuUtil() {
             }
             get_util =
                 reinterpret_cast<GetUtilFn>(GetProcAddress(mod, "nvmlDeviceGetUtilizationRates"));
+            get_temp =
+                reinterpret_cast<GetTempFn>(GetProcAddress(mod, "nvmlDeviceGetTemperature"));
+            get_power =
+                reinterpret_cast<GetPowerFn>(GetProcAddress(mod, "nvmlDeviceGetPowerUsage"));
+            get_name = reinterpret_cast<GetNameFn>(GetProcAddress(mod, "nvmlDeviceGetName"));
             if (init_fn && get_dev && get_util && init_fn() == 0) {
                 if (get_dev(0, &dev) != 0) {
                     dev = nullptr;
@@ -114,14 +189,192 @@ int QueryNvmlGpuUtil() {
             }
         }
     }
-    if (!dev || !get_util) {
-        return -1;
+    NvmlGpuMetrics out;
+    if (!dev) {
+        return out;
     }
-    NvmlUtil util{};
-    if (get_util(dev, &util) == 0) {
-        return static_cast<int>(std::clamp(util.gpu, 0U, 100U));
+    if (want_name && get_name) {
+        char buf[128]{};
+        if (get_name(dev, buf, sizeof(buf)) == 0) {
+            out.name = QString::fromUtf8(buf).simplified();
+        }
     }
-    return -1;
+    if (get_util) {
+        NvmlUtil util{};
+        if (get_util(dev, &util) == 0) {
+            out.util = static_cast<int>(std::clamp(util.gpu, 0U, 100U));
+        }
+    }
+    if (get_temp) {
+        unsigned int temp = 0;
+        if (get_temp(dev, 0 /* NVML_TEMPERATURE_GPU */, &temp) == 0 && temp > 0 && temp < 150) {
+            out.temp_c = static_cast<int>(temp);
+        }
+    }
+    if (get_power) {
+        unsigned int mw = 0;
+        if (get_power(dev, &mw) == 0) {
+            out.power_w = static_cast<int>(std::lround(static_cast<double>(mw) / 1000.0));
+        }
+    }
+    return out;
+}
+
+QString QueryCpuBrandString() {
+    wchar_t buf[256]{};
+    DWORD bytes = sizeof(buf);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, L"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
+                     L"ProcessorNameString", RRF_RT_REG_SZ, nullptr, buf,
+                     &bytes) != ERROR_SUCCESS) {
+        return {};
+    }
+    QString name = QString::fromWCharArray(buf).simplified();
+    name.remove(QStringLiteral("(R)"), Qt::CaseInsensitive);
+    name.remove(QStringLiteral("(TM)"), Qt::CaseInsensitive);
+    name.remove(QStringLiteral(" CPU"), Qt::CaseInsensitive);
+    const int at_idx = name.indexOf(QStringLiteral(" @"));
+    if (at_idx > 0) {
+        name.truncate(at_idx);
+    }
+    return name.simplified();
+}
+
+QString QueryGpuDisplayName() {
+    if (const QString nvml_name = QueryNvmlGpuMetrics(true).name; !nvml_name.isEmpty()) {
+        return nvml_name;
+    }
+    DISPLAY_DEVICEW dd{};
+    dd.cb = sizeof(dd);
+    for (DWORD i = 0; EnumDisplayDevicesW(nullptr, i, &dd, 0); ++i) {
+        const QString name = QString::fromWCharArray(dd.DeviceString).simplified();
+        if (name.isEmpty()) {
+            continue;
+        }
+        if (name.contains(QStringLiteral("Parsec"), Qt::CaseInsensitive) ||
+            name.contains(QStringLiteral("Microsoft Basic"), Qt::CaseInsensitive) ||
+            name.contains(QStringLiteral("Virtual"), Qt::CaseInsensitive) ||
+            name.contains(QStringLiteral("RDP"), Qt::CaseInsensitive)) {
+            continue;
+        }
+        return name;
+    }
+    return {};
+}
+
+QString QueryRamSummary() {
+    const UINT size = GetSystemFirmwareTable('RSMB', 0, nullptr, 0);
+    if (size < 16 || size > 1024 * 1024) {
+        return {};
+    }
+    std::vector<u8> raw(size);
+    if (GetSystemFirmwareTable('RSMB', 0, raw.data(), size) != size) {
+        return {};
+    }
+    u32 table_len = 0;
+    std::memcpy(&table_len, raw.data() + 4, sizeof(table_len));
+    const std::size_t end = std::min<std::size_t>(raw.size(), 8 + static_cast<std::size_t>(table_len));
+    std::size_t pos = 8;
+
+    u64 total_mb = 0;
+    int sticks = 0;
+    u8 mem_type = 0;
+    u16 speed_mhz = 0;
+
+    while (pos + 4 <= end) {
+        const u8 type = raw[pos];
+        const u8 len = raw[pos + 1];
+        if (len < 4 || pos + len > end) {
+            break;
+        }
+        if (type == 17 && len >= 0x17) {
+            u16 sz = 0;
+            std::memcpy(&sz, raw.data() + pos + 0x0C, sizeof(sz));
+            u64 stick_mb = 0;
+            if (sz == 0x7FFF && len >= 0x20) {
+                u32 ext = 0;
+                std::memcpy(&ext, raw.data() + pos + 0x1C, sizeof(ext));
+                stick_mb = ext;
+            } else if (sz != 0 && sz != 0xFFFF) {
+                stick_mb = (sz & 0x8000) ? ((sz & 0x7FFF) / 1024ULL) : sz;
+            }
+            if (stick_mb > 0) {
+                total_mb += stick_mb;
+                ++sticks;
+                if (mem_type == 0) {
+                    mem_type = raw[pos + 0x12];
+                }
+                u16 spd = 0;
+                if (len >= 0x22) {
+                    std::memcpy(&spd, raw.data() + pos + 0x20, sizeof(spd));
+                }
+                if (spd == 0 || spd >= 20000) {
+                    std::memcpy(&spd, raw.data() + pos + 0x15, sizeof(spd));
+                }
+                if (spd > 0 && spd < 20000 && speed_mhz == 0) {
+                    speed_mhz = spd;
+                }
+            }
+        }
+        pos += len;
+        while (pos + 1 < end && !(raw[pos] == 0 && raw[pos + 1] == 0)) {
+            ++pos;
+        }
+        pos += 2;
+    }
+
+    if (sticks == 0 || total_mb == 0) {
+        return {};
+    }
+    QString type_str = QStringLiteral("RAM");
+    switch (mem_type) {
+    case 0x13:
+        type_str = QStringLiteral("DDR2");
+        break;
+    case 0x18:
+        type_str = QStringLiteral("DDR3");
+        break;
+    case 0x1A:
+        type_str = QStringLiteral("DDR4");
+        break;
+    case 0x1E:
+        type_str = QStringLiteral("LPDDR4");
+        break;
+    case 0x22:
+        type_str = QStringLiteral("DDR5");
+        break;
+    case 0x23:
+        type_str = QStringLiteral("LPDDR5");
+        break;
+    default:
+        break;
+    }
+    const QString ch_str = sticks >= 4 ? QStringLiteral("Quad Channel")
+                         : sticks == 3 ? QStringLiteral("Triple Channel")
+                         : sticks == 2 ? QStringLiteral("Dual Channel")
+                                       : QStringLiteral("Single Channel");
+    const u64 gb = (total_mb + 512) / 1024;
+    if (speed_mhz > 0) {
+        return QStringLiteral("%1 GB %2 %3 MHz (%4)")
+            .arg(gb)
+            .arg(type_str)
+            .arg(speed_mhz)
+            .arg(ch_str);
+    }
+    return QStringLiteral("%1 GB %2 (%3)").arg(gb).arg(type_str, ch_str);
+}
+
+QString BuildHardwareBannerText() {
+    QStringList parts;
+    if (const QString cpu = QueryCpuBrandString(); !cpu.isEmpty()) {
+        parts << cpu;
+    }
+    if (const QString gpu = QueryGpuDisplayName(); !gpu.isEmpty()) {
+        parts << gpu;
+    }
+    if (const QString ram = QueryRamSummary(); !ram.isEmpty()) {
+        parts << ram;
+    }
+    return parts.join(QStringLiteral("  |  "));
 }
 #endif
 
@@ -153,6 +406,10 @@ PerformanceOverlay::PerformanceOverlay(MainWindow* parent)
     m_label.setPixelSize(10);
     m_label.setWeight(QFont::Bold);
     m_label.setLetterSpacing(QFont::AbsoluteSpacing, 1.0);
+
+#ifdef _WIN32
+    m_hw_banner_text = BuildHardwareBannerText();
+#endif
 
     Relayout();
     Place();
@@ -228,8 +485,19 @@ void PerformanceOverlay::Relayout() {
                                         std::max(value.horizontalAdvance(m_ram_text),
                                                  value.horizontalAdvance(m_vram_text)));
         }
+        if (m_show_details && (!m_cpu_core_text.isEmpty() || !m_gpu_detail_text.isEmpty())) {
+            const int names = std::max(label.horizontalAdvance(tr("CPU")),
+                                       label.horizontalAdvance(tr("GPU")));
+            add(Cell::Kind::Details, names + 8 +
+                                         std::max(value.horizontalAdvance(m_cpu_core_text),
+                                                  value.horizontalAdvance(m_gpu_detail_text)));
+        }
     }
-    const QSize wanted{x + Pad, compact ? CompactHeight : FullHeight};
+    const bool has_header = !compact && m_show_hw_banner && !m_hw_banner_text.isEmpty();
+    const int min_banner_w =
+        has_header ? Edge + Pad + label.horizontalAdvance(m_hw_banner_text) + Pad : 0;
+    const QSize wanted{std::max(x + Pad, min_banner_w),
+                       compact ? CompactHeight : (FullHeight + (has_header ? HeaderHeight : 0))};
     if (wanted != size()) {
         setFixedSize(wanted);
     }
@@ -354,7 +622,24 @@ void PerformanceOverlay::UpdateStats(const Core::PerfStatsResults& results,
     if (cpu_pct >= 0.0) {
         m_cpu_text = tr("%1%").arg(std::lround(cpu_pct));
     }
-    m_gpu_util = QueryNvmlGpuUtil();
+    m_cpu_max_core = QueryMaxCpuCorePercent();
+    if (m_cpu_max_core >= 0) {
+        m_cpu_core_text = tr("Single Core %1%").arg(m_cpu_max_core);
+    } else {
+        m_cpu_core_text.clear();
+    }
+    const NvmlGpuMetrics nvml = QueryNvmlGpuMetrics();
+    m_gpu_util = nvml.util;
+    m_gpu_temp = nvml.temp_c;
+    if (nvml.power_w >= 0 && nvml.temp_c > 0) {
+        m_gpu_detail_text = tr("%1W • %2°C").arg(nvml.power_w).arg(nvml.temp_c);
+    } else if (nvml.temp_c > 0) {
+        m_gpu_detail_text = tr("%1°C").arg(nvml.temp_c);
+    } else if (nvml.power_w >= 0) {
+        m_gpu_detail_text = tr("%1W").arg(nvml.power_w);
+    } else {
+        m_gpu_detail_text.clear();
+    }
     const double ft_ms = !std::isnan(results.frametime) ? results.frametime * 1000.0 : -1.0;
     if (m_gpu_util >= 0 && ft_ms > 0.0) {
         m_gpu_ms_text = tr("%1 ms").arg(ft_ms * (m_gpu_util / 100.0), 0, 'f', 1);
@@ -374,6 +659,9 @@ void PerformanceOverlay::UpdateStats(const Core::PerfStatsResults& results,
         m_limit_kind = 2;
     } else if (cpu_pct >= 82.0) {
         m_limit_text = tr("Limited by CPU");
+        m_limit_kind = 1;
+    } else if (m_cpu_max_core >= 90 && (m_gpu_util < 0 || m_gpu_util < 85)) {
+        m_limit_text = tr("Limited by 1 Core");
         m_limit_kind = 1;
     } else if (!std::isnan(fps) && ((fps >= 29.0 && fps <= 31.0) || (fps >= 58.5 && fps <= 61.5))) {
         m_limit_text = tr("Capped");
@@ -439,18 +727,30 @@ void PerformanceOverlay::paintEvent(QPaintEvent*) {
     const QFontMetrics big{m_big};
     const QFontMetrics value{m_value};
     const QFontMetrics label{m_label};
-    const int h = height();
-    // Two text rows, centred in the bar.
+    const bool has_header = !UISettings::values.perf_overlay_compact.GetValue() &&
+                            m_show_hw_banner && !m_hw_banner_text.isEmpty();
+    const int y0 = has_header ? HeaderHeight : 0;
+    const int h = height() - y0;
+    if (has_header) {
+        painter.setFont(m_label);
+        painter.setPen(QColor{0xdc, 0xdc, 0xe4});
+        painter.drawText(QRect{Edge + Pad, 1, width() - Edge - Pad * 2, HeaderHeight - 1},
+                         Qt::AlignLeft | Qt::AlignVCenter, m_hw_banner_text);
+        painter.setPen(QPen{QColor{255, 255, 255, 28}, 1.0});
+        painter.drawLine(QPointF{static_cast<qreal>(Edge), static_cast<qreal>(y0)},
+                         QPointF{width() - 1.0, static_cast<qreal>(y0)});
+    }
+    // Two text rows, centred in the bar below the optional hardware header.
     const int rows = value.height() + 3 + label.height();
-    const int row1 = (h - rows) / 2 + value.ascent();
-    const int row2 = (h - rows) / 2 + value.height() + 3 + label.ascent();
+    const int row1 = y0 + (h - rows) / 2 + value.ascent();
+    const int row2 = y0 + (h - rows) / 2 + value.height() + 3 + label.ascent();
 
     for (size_t index = 0; index < m_cells.size(); ++index) {
         const Cell& cell = m_cells[index];
         if (index != 0) {
             painter.setPen(QPen{QColor{255, 255, 255, 34}, 1.0});
             const qreal line = cell.x - Gap / 2.0;
-            painter.drawLine(QPointF{line, 9.0}, QPointF{line, h - 9.0});
+            painter.drawLine(QPointF{line, y0 + 9.0}, QPointF{line, y0 + h - 9.0});
         }
         switch (cell.kind) {
         case Cell::Kind::Fps: {
@@ -459,13 +759,13 @@ void PerformanceOverlay::paintEvent(QPaintEvent*) {
             const int digits = std::max(big.horizontalAdvance(QStringLiteral("000")),
                                         big.horizontalAdvance(m_fps_text));
             // Right-aligned in their room, so "60" and "120" end at the same place.
-            painter.drawText(QRect{cell.x, 0, digits, h}, Qt::AlignRight | Qt::AlignVCenter,
+            painter.drawText(QRect{cell.x, y0, digits, h}, Qt::AlignRight | Qt::AlignVCenter,
                              m_fps_text);
             painter.setFont(m_label);
             painter.setPen(Text);
             const int beside = cell.x + digits + 7;
             if (m_fps_detail.isEmpty()) {
-                painter.drawText(QRect{beside, 0, cell.width, h}, Qt::AlignLeft | Qt::AlignVCenter,
+                painter.drawText(QRect{beside, y0, cell.width, h}, Qt::AlignLeft | Qt::AlignVCenter,
                                  tr("FPS"));
             } else {
                 painter.drawText(beside, row1 - 1, tr("FPS"));
@@ -484,8 +784,8 @@ void PerformanceOverlay::paintEvent(QPaintEvent*) {
             break;
         case Cell::Kind::Graph: {
             // One bar per half second, newest on the right; a dip stands out in orange or red.
-            const QRectF plot{static_cast<qreal>(cell.x), 10.0, static_cast<qreal>(cell.width),
-                              h - 20.0};
+            const QRectF plot{static_cast<qreal>(cell.x), y0 + 10.0,
+                              static_cast<qreal>(cell.width), h - 20.0};
             painter.setPen(Qt::NoPen);
             painter.fillRect(QRectF{plot.left(), plot.bottom(), plot.width(), 1.0},
                              QColor{255, 255, 255, 40});
@@ -516,7 +816,7 @@ void PerformanceOverlay::paintEvent(QPaintEvent*) {
                                        label.horizontalAdvance(tr("GPU"))) +
                               6;
             const int block = value.height() * 2 + 2;
-            const int first = (h - block) / 2 + value.ascent();
+            const int first = y0 + (h - block) / 2 + value.ascent();
             const int second = first + value.height() + 2;
             painter.setFont(m_label);
             painter.setPen(Dim);
@@ -550,14 +850,14 @@ void PerformanceOverlay::paintEvent(QPaintEvent*) {
             if (both) {
                 // Two lines of the same size, centred together.
                 const int block = value.height() * 2 + 2;
-                const int first = (h - block) / 2 + value.ascent();
+                const int first = y0 + (h - block) / 2 + value.ascent();
                 painter.setPen(Cheese);
                 painter.drawText(cell.x, first, m_upscale_text);
                 painter.setPen(Text);
                 painter.drawText(cell.x, first + value.height() + 2, m_frame_gen_text);
             } else {
                 painter.setPen(Cheese);
-                painter.drawText(QRect{cell.x, 0, cell.width, h}, Qt::AlignLeft | Qt::AlignVCenter,
+                painter.drawText(QRect{cell.x, y0, cell.width, h}, Qt::AlignLeft | Qt::AlignVCenter,
                                  m_upscale_text.isEmpty() ? m_frame_gen_text : m_upscale_text);
             }
             break;
@@ -567,7 +867,7 @@ void PerformanceOverlay::paintEvent(QPaintEvent*) {
                                        label.horizontalAdvance(tr("VRAM"))) +
                               8;
             const int block = value.height() * 2 + 2;
-            const int first = (h - block) / 2 + value.ascent();
+            const int first = y0 + (h - block) / 2 + value.ascent();
             const int second = first + value.height() + 2;
             painter.setFont(m_label);
             painter.setPen(Dim);
@@ -582,6 +882,35 @@ void PerformanceOverlay::paintEvent(QPaintEvent*) {
                 // Video memory near its budget is where textures start to be thrown out.
                 painter.setPen(m_vram_share > 0.95 ? Bad : m_vram_share > 0.85 ? Slow : Text);
                 painter.drawText(cell.x + names, second, m_vram_text);
+            }
+            break;
+        }
+        case Cell::Kind::Details: {
+            const int names = std::max(label.horizontalAdvance(tr("CPU")),
+                                       label.horizontalAdvance(tr("GPU"))) +
+                              8;
+            const int block = value.height() * 2 + 2;
+            const int first = y0 + (h - block) / 2 + value.ascent();
+            const int second = first + value.height() + 2;
+            painter.setFont(m_label);
+            painter.setPen(Dim);
+            if (!m_cpu_core_text.isEmpty()) {
+                painter.drawText(cell.x, first, tr("CPU"));
+            }
+            if (!m_gpu_detail_text.isEmpty()) {
+                painter.drawText(cell.x, second, tr("GPU"));
+            }
+            painter.setFont(m_value);
+            if (!m_cpu_core_text.isEmpty()) {
+                painter.setPen(m_cpu_max_core >= 90 ? Accent : Text);
+                painter.drawText(cell.x + names, first, m_cpu_core_text);
+            }
+            if (!m_gpu_detail_text.isEmpty()) {
+                const QColor gpu_col = m_gpu_temp >= 85 ? Bad
+                                     : m_gpu_temp >= 78 ? Slow
+                                                        : Text;
+                painter.setPen(gpu_col);
+                painter.drawText(cell.x + names, second, m_gpu_detail_text);
             }
             break;
         }
@@ -679,6 +1008,28 @@ void PerformanceOverlay::contextMenuEvent(QContextMenuEvent* event) {
     toggle(tr("Compact (frame rate and frame time only)"), ui.perf_overlay_compact);
     toggle(tr("Frame rate history"), ui.perf_overlay_graph);
     toggle(tr("Memory"), ui.perf_overlay_memory);
+    {
+        QAction* const details_act =
+            menu.addAction(tr("Details (CPU Single Core • GPU W/°C)"), [this] {
+                m_show_details = !m_show_details;
+                Relayout();
+                Place();
+                update();
+            });
+        details_act->setCheckable(true);
+        details_act->setChecked(m_show_details);
+    }
+    {
+        QAction* const hw_act =
+            menu.addAction(tr("Hardware info (CPU | GPU | RAM)"), [this] {
+                m_show_hw_banner = !m_show_hw_banner;
+                Relayout();
+                Place();
+                update();
+            });
+        hw_act->setCheckable(true);
+        hw_act->setChecked(m_show_hw_banner);
+    }
 
     QMenu* const opacity = menu.addMenu(tr("Background"));
     auto* const levels = new QActionGroup(opacity);

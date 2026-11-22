@@ -1087,10 +1087,10 @@ void PatchManager::ApplyLayeredFS(VirtualFile& romfs, ContentRecordType type) co
         }
     }
 
-    // FritCheeLii: Built-in OoT Button Icons selector (Switch / Xbox / PlayStation / PC / Steam Deck)
+    // FritCheeLii: Built-in OoT Button Icons selector (Switch / Xbox / PlayStation / PC / Steam Deck / Xbox PC)
     if (title_id == 0x0400486024DEC000 && load_dir != nullptr) {
-        constexpr std::array<const char*, 5> ICON_STYLES{"", "xbox", "playstation", "pc",
-                                                         "steamdeck"};
+        constexpr std::array<const char*, 6> ICON_STYLES{"",          "xbox",     "playstation",
+                                                         "pc",        "steamdeck", "xbox_label"};
         const int style_idx = Settings::values.oot_button_icons.GetValue();
         if (style_idx >= 1 && style_idx < static_cast<int>(ICON_STYLES.size())) {
             if (auto icons_root = FindSubdirectoryCaseless(load_dir, "button_icons");

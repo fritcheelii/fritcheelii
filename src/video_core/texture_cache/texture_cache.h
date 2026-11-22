@@ -181,8 +181,9 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
         const char* value = std::getenv("EDEN_NX2_TC_ASYNC_EVICT");
         return value == nullptr || value[0] != '0';
     }();
-    const auto Evict = [this](ImageId image_id) {
+    const auto Evict = [this, &high_priority_mode](ImageId image_id) {
         auto& image = slot_images[image_id];
+        NoteThrashDelete(image, high_priority_mode);
         if (True(image.flags & ImageFlagBits::Tracked)) {
             UntrackImage(image, image_id);
         }
@@ -253,13 +254,15 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
         if (!out_of_memory && used_memory() < critical_memory + 512_MiB) {
             ticks_to_destroy = (std::max)(ticks_to_destroy, min_age);
         }
-        // Fritchii v6.2 Thrash Guard: keep hot textures used in the last 12 frames alive under
-        // 4 GB VRAM pressure so they are not deleted and recreated dozens of times per frame.
+        // Fritchii v6.2 / v6.5 Adaptive Thrash Guard: keep hot textures alive under 4-6 GB VRAM
+        // pressure so they are not deleted and recreated dozens of times per frame.
         if (smart_gc_4gb && !out_of_memory) {
             ticks_to_destroy = (std::max)(ticks_to_destroy, 12ULL);
         }
+        if (!out_of_memory && thrash_floor > 0) {
+            ticks_to_destroy = (std::max)(ticks_to_destroy, thrash_floor);
+        }
         num_iterations = aggressive_mode ? 40 : (high_priority_mode ? 20 : 10);
-        // NX2navi v0.10.1 pressure relief: drain dead render targets faster past expected budget.
         if (smart_gc_4gb && high_priority_mode) {
             num_iterations *= 2;
         }
@@ -273,9 +276,6 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
         }
         auto& image = slot_images[image_id];
         if (True(image.flags & ImageFlagBits::IsDecoding)) {
-            if (!smart_gc_4gb) {
-                --num_iterations;
-            }
             return false;
         }
         // A render target drawn over is dropped without copying it back (the idea of Hookshot
@@ -287,11 +287,7 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
             // An image the GPU wrote waits for the GPU to copy it back first (a hitch each, while
             // turning the camera in Ocarina): only past the critical threshold.
             (!aggressive_mode && !out_of_memory && must_download)) {
-            // Fritchii v6.2 FRITCHII_TC_COLLECT_EVICTABLE: do not waste GC budget on un-evictable
-            // ASTC/downloadable textures when dead textures sit right behind them.
-            if (!smart_gc_4gb) {
-                --num_iterations;
-            }
+            // Fritchii v6.5: do not waste GC budget on un-evictable textures.
             return false;
         }
         --num_iterations;
@@ -1028,6 +1024,7 @@ void TextureCache<P>::TickFrame() {
         uploaded_ranges.clear();
     }
 
+    TickThrashGuard();
     runtime.TickFrame();
     ++frame_tick;
 
@@ -1037,6 +1034,124 @@ void TextureCache<P>::TickFrame() {
         }
         async_buffers_death_ring.clear();
     }
+}
+
+template <class P>
+u64 TextureCache<P>::ThrashShapeKey(const ImageInfo& info) noexcept {
+    u64 h = static_cast<u64>(info.format);
+    h = h * 0x9E3779B97F4A7C15ULL ^ static_cast<u64>(info.size.width);
+    h = h * 0x9E3779B97F4A7C15ULL ^ static_cast<u64>(info.size.height);
+    h = h * 0x9E3779B97F4A7C15ULL ^ static_cast<u64>(info.size.depth);
+    h = h * 0x9E3779B97F4A7C15ULL ^ static_cast<u64>(info.resources.levels);
+    h = h * 0x9E3779B97F4A7C15ULL ^ static_cast<u64>(info.resources.layers);
+    return h;
+}
+
+template <class P>
+size_t TextureCache<P>::ThrashSlot(GPUVAddr gpu_addr, u64 shape) noexcept {
+    u64 h = (gpu_addr ^ shape) * 0xBF58476D1CE4E5B9ULL;
+    h ^= h >> 30;
+    return static_cast<size_t>(h & (ThrashGhostSlots - 1));
+}
+
+template <class P>
+void TextureCache<P>::NoteThrashDelete(const Image& image, bool pressured) {
+    static const bool enabled = [] {
+        const char* value = std::getenv("FRITCHII_TC_THRASH_GUARD");
+        return value == nullptr || value[0] != '0';
+    }();
+    if (!enabled) {
+        return;
+    }
+    if (thrash_ghosts.empty()) {
+        thrash_ghosts.resize(ThrashGhostSlots);
+    }
+    const u64 shape = ThrashShapeKey(image.info);
+    thrash_ghosts[ThrashSlot(image.gpu_addr, shape)] = ThrashGhost{
+        .gpu_addr = image.gpu_addr,
+        .shape = shape,
+        .last_use = image.last_use_tick,
+        .pressured = pressured,
+    };
+}
+
+template <class P>
+void TextureCache<P>::NoteThrashMade(const ImageInfo& info, GPUVAddr gpu_addr) {
+    if (thrash_ghosts.empty()) {
+        return;
+    }
+    const u64 shape = ThrashShapeKey(info);
+    ThrashGhost& ghost = thrash_ghosts[ThrashSlot(gpu_addr, shape)];
+    if (ghost.gpu_addr != gpu_addr || ghost.shape != shape) {
+        return;
+    }
+    const u64 interval = frame_tick - (std::min)(frame_tick, ghost.last_use);
+    const bool pressured = ghost.pressured;
+    ghost = ThrashGhost{};
+    if (pressured && interval <= ThrashMaxFloor) {
+        size_t bucket = 0;
+        while (bucket + 1 < ThrashBuckets && interval > (u64{4} << bucket)) {
+            ++bucket;
+        }
+        ++thrash_window[bucket];
+    }
+}
+
+template <class P>
+void TextureCache<P>::TickThrashGuard() {
+    static const bool enabled = [] {
+        const char* value = std::getenv("FRITCHII_TC_THRASH_GUARD");
+        return value == nullptr || value[0] != '0';
+    }();
+    if (!enabled) {
+        thrash_floor = 0;
+        thrash_window = {};
+        return;
+    }
+    constexpr u64 CheckFrames = 60;
+    constexpr u32 MinRemakes = 8;
+    if (frame_tick % CheckFrames != 0) {
+        return;
+    }
+    const bool pressure = total_used_memory >= expected_memory;
+    thrash_calm_frames = pressure ? 0 : thrash_calm_frames + CheckFrames;
+    const u32 remakes = std::accumulate(thrash_window.begin(), thrash_window.end(), u32{0});
+    u64 wanted = 0;
+    if (remakes >= MinRemakes) {
+        u32 seen = 0;
+        for (size_t bucket = 0; bucket < ThrashBuckets; ++bucket) {
+            seen += thrash_window[bucket];
+            if (seen * 10 >= remakes * 9) {
+                const u64 gap = u64{4} << bucket;
+                wanted = (std::min)(gap + gap / 4 + 2, ThrashMaxFloor);
+                break;
+            }
+        }
+    }
+    thrash_window = {};
+    u64 floor = thrash_floor;
+    if (wanted > floor) {
+        floor = wanted;
+    } else if (thrash_calm_frames >= 600 && floor != 0) {
+        floor -= floor / 8 + 1;
+    }
+    if (floor != 0) {
+        if constexpr (requires { runtime.GetDeviceMemoryBudget(); }) {
+            const u64 budget = runtime.GetDeviceMemoryBudget();
+            if (budget != 0) {
+                u64 bytes = 0;
+                for (const auto [image_id, image] : slot_images) {
+                    if (False(image->flags & ImageFlagBits::Unbacked)) {
+                        bytes += ImageMemoryBytes(*image);
+                    }
+                }
+                if (bytes > budget / 4 * 3) {
+                    floor /= 2;
+                }
+            }
+        }
+    }
+    thrash_floor = floor;
 }
 
 template <class P>
@@ -3495,6 +3610,7 @@ std::optional<DAddr> TextureCache<P>::ImageCpuAddress(GPUVAddr gpu_addr, size_t 
 template <class P>
 ImageId TextureCache<P>::InsertImage(const ImageInfo& info, GPUVAddr gpu_addr,
                                      RelaxedOptions options) {
+    NoteThrashMade(info, gpu_addr);
     std::optional<DAddr> cpu_addr = ImageCpuAddress(gpu_addr, CalculateGuestSizeInBytes(info));
     if (!cpu_addr) {
         const DAddr fake_addr = ~(1ULL << 40ULL) + virtual_invalid_space;
@@ -4045,6 +4161,7 @@ std::pair<u32, u32> TextureCache<P>::PrepareDmaImage(ImageId dst_id, GPUVAddr ba
     const auto base = image.TryFindBase(base_addr);
     PrepareImage(dst_id, mark_as_modified, false);
     const auto& new_image = slot_images[dst_id];
+    slot_images[dst_id].last_use_tick = frame_tick;
     lru_cache.Touch(new_image.lru_index, frame_tick);
     return std::make_pair(base->level, base->layer);
 }
@@ -4862,6 +4979,7 @@ void TextureCache<P>::PrepareImage(ImageId image_id, bool is_modification, bool 
         }
         MarkModification(image);
     }
+    image.last_use_tick = frame_tick;
     lru_cache.Touch(image.lru_index, frame_tick);
 }
 

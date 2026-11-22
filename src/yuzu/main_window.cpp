@@ -4978,17 +4978,32 @@ void MainWindow::OnApplyRecommendedSettings() {
     }
     QString host_text;
     const Settings::HostProfile host = RecommendedHost(host_text);
-    const bool accepted = RecommendedSettingsDialog::Ask(this, host_text);
+    const auto choice = RecommendedSettingsDialog::ChoosePreset(this, host_text);
     if (emulation_running) {
         // A game started behind the question; ask again when none runs.
         return;
     }
     Settings::values.recommended_settings_prompt_shown = true;
-    if (!accepted) {
+    if (choice == RecommendedSettingsDialog::PresetChoice::Cancel) {
         OnSaveConfig();
         return;
     }
-    const auto changes = Settings::ApplyRecommendedSettings(Settings::values, host);
+    Settings::HostProfile chosen = host;
+    constexpr u64 GiB = u64{1} << 30;
+    if (choice == RecommendedSettingsDialog::PresetChoice::Entry4GB) {
+        chosen.ram_bytes = 16 * GiB;
+        chosen.vram_bytes = 4 * GiB;
+        chosen.integrated = false;
+    } else if (choice == RecommendedSettingsDialog::PresetChoice::Mid8GB) {
+        chosen.ram_bytes = 16 * GiB;
+        chosen.vram_bytes = 8 * GiB;
+        chosen.integrated = false;
+    } else if (choice == RecommendedSettingsDialog::PresetChoice::High16GB) {
+        chosen.ram_bytes = 32 * GiB;
+        chosen.vram_bytes = 16 * GiB;
+        chosen.integrated = false;
+    }
+    const auto changes = Settings::ApplyRecommendedSettings(Settings::values, chosen);
     LOG_INFO(Config, "Applied the recommended settings: {} changed", changes.size());
     Settings::UpdateGPUAccuracy();
     OnSaveConfig();
@@ -5835,7 +5850,7 @@ void MainWindow::UpdateWindowTitle(std::string_view title_name, std::string_view
                                    std::string_view gpu_vendor) {
     static const std::string build_id = std::string{Common::g_build_id};
     static const std::string yuzu_title =
-        fmt::format("FritCheeLii | v4.2 | {}", std::string{Common::g_compiler_id});
+        fmt::format("FritCheeLii | {} | {}", FritchiiUi::Version, std::string{Common::g_compiler_id});
 
     const auto override_title =
         fmt::format(fmt::runtime(std::string(Common::g_title_bar_format_idle)), build_id);

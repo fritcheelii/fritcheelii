@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <string>
+#include <QComboBox>
+#include <QDialog>
 #include <QFont>
 #include <QFontMetrics>
+#include <QHBoxLayout>
+#include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QStringList>
+#include <QVBoxLayout>
 #include "qt_common/config/shared_translation.h"
 #include "yuzu/recommended_settings_dialog.h"
 
@@ -85,28 +90,62 @@ void ShowChanges(QWidget* parent, const QString& title, const QString& text,
 
 } // namespace
 
-bool RecommendedSettingsDialog::Ask(QWidget* parent, const QString& host_text) {
-    QMessageBox box(parent);
-    box.setIcon(QMessageBox::Question);
-    box.setWindowTitle(tr("Best settings for this PC"));
-    box.setText(tr("Use the settings FritCheeLii recommends for this PC?"));
-    box.setInformativeText(
-        tr("%1\n\nThey set performance options, AMD FSR, frame generation and Ocarina of Time's "
-           "render size to what fits this graphics card and memory. You can return to the "
-           "optimized default profile at any time with Help > Restore Default Settings. "
-           "Settings you made for a single game (right-click a game > Configure Game) do not "
-           "change and still win over these.")
-            .arg(host_text));
-    auto* const use = box.addButton(tr("Use recommended settings"), QMessageBox::AcceptRole);
-    box.addButton(tr("Not now"), QMessageBox::RejectRole);
-    box.setDefaultButton(use);
-    // The theme draws the default button's text bold, but the button is sized for normal text:
-    // the label was cut off ("Jse recommended setting").
-    QFont bold = use->font();
+RecommendedSettingsDialog::PresetChoice RecommendedSettingsDialog::ChoosePreset(
+    QWidget* parent, const QString& host_text) {
+    QDialog dlg(parent);
+    dlg.setWindowTitle(tr("Best settings for this PC"));
+    dlg.setWindowFlag(Qt::WindowContextHelpButtonHint, false);
+    dlg.setMinimumWidth(480);
+
+    auto* layout = new QVBoxLayout(&dlg);
+    layout->setSpacing(10);
+
+    auto* title_lbl =
+        new QLabel(tr("<b>Use the settings FritCheeLii recommends for this PC?</b>"), &dlg);
+    layout->addWidget(title_lbl);
+
+    auto* info_lbl = new QLabel(
+        tr("%1\n\nThese configure performance options, AMD FSR, frame generation, and Ocarina of "
+           "Time's render size. You can return to defaults via Help > Restore Default Settings.")
+            .arg(host_text),
+        &dlg);
+    info_lbl->setWordWrap(true);
+    layout->addWidget(info_lbl);
+
+    layout->addWidget(new QLabel(tr("Preset to apply:"), &dlg));
+    auto* combo = new QComboBox(&dlg);
+    combo->addItems({
+        tr("Auto — Recommended for This PC"),
+        tr("Entry / 4–6 GB VRAM (Max FPS — Handheld, Balanced FSR, BC3)"),
+        tr("Mid-Range / 8 GB VRAM (Balanced — Quality FSR, BC3)"),
+        tr("High-End / 12–16 GB+ VRAM (Best Visuals — Native/Quality, Uncompressed)"),
+    });
+    layout->addWidget(combo);
+
+    auto* btns = new QHBoxLayout;
+    btns->addStretch(1);
+    auto* apply_btn = new QPushButton(tr("Apply settings"), &dlg);
+    auto* cancel_btn = new QPushButton(tr("Not now"), &dlg);
+    apply_btn->setDefault(true);
+    QFont bold = apply_btn->font();
     bold.setBold(true);
-    use->setMinimumWidth(QFontMetrics{bold}.horizontalAdvance(use->text()) + 40);
-    box.exec();
-    return box.clickedButton() == use;
+    apply_btn->setFont(bold);
+    apply_btn->setMinimumWidth(QFontMetrics{bold}.horizontalAdvance(apply_btn->text()) + 36);
+    btns->addWidget(apply_btn);
+    btns->addWidget(cancel_btn);
+    layout->addLayout(btns);
+
+    QObject::connect(apply_btn, &QPushButton::clicked, &dlg, &QDialog::accept);
+    QObject::connect(cancel_btn, &QPushButton::clicked, &dlg, &QDialog::reject);
+
+    if (dlg.exec() != QDialog::Accepted) {
+        return PresetChoice::Cancel;
+    }
+    return static_cast<PresetChoice>(combo->currentIndex());
+}
+
+bool RecommendedSettingsDialog::Ask(QWidget* parent, const QString& host_text) {
+    return ChoosePreset(parent, host_text) != PresetChoice::Cancel;
 }
 
 void RecommendedSettingsDialog::ShowApplied(
