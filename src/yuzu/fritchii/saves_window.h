@@ -31,8 +31,10 @@ std::vector<OotSlotBrief> ListOotSaveSlots();
 bool SwitchOotSaveSlot(int target_slot);
 
 /// Prompts the user to pick one of the 8 Zelda OoT save slots before launching (unless skipped).
-/// Returns true if the launch should proceed, false if the user cancelled.
-bool ChooseOotSaveSlotBeforePlay(QWidget* parent, const std::function<bool()>& emulation_running);
+/// When `force_show` is true, always displays the picker; when `launch_mode` is false, selects
+/// the active slot without launching the game. Returns true if accepted/proceeding, false if cancelled.
+bool ChooseOotSaveSlotBeforePlay(QWidget* parent, const std::function<bool()>& emulation_running,
+                                 bool force_show = false, bool launch_mode = true);
 
 /// Exports all emulator logs (including log/history/) to a user-chosen .zip file.
 void ExportLogsZip(QWidget* parent);

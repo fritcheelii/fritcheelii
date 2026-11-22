@@ -125,7 +125,9 @@ void ConfigureInput::Initialize(InputCommon::InputSubsystem* input_subsystem,
                                               tr("PlayStation"),
                                               tr("PC (Keyboard/Mouse)"),
                                               tr("Steam Deck"),
-                                              tr("Xbox (PC Layout — A Confirm)")});
+                                              tr("Xbox (PC Layout — A Confirm)"),
+                                              tr("PlayStation (PC Layout — ✕ Confirm)"),
+                                              tr("Steam Deck (PC Layout — A Confirm)")});
             combo_oot_button_icons->setToolTip(
                 tr("Selects on-screen controller button prompts from "
                    "user/load/0400486024DEC000/button_icons/<style>. Requires game restart."));
@@ -140,9 +142,9 @@ void ConfigureInput::Initialize(InputCommon::InputSubsystem* input_subsystem,
             int prev_icon_index = combo_oot_button_icons->currentIndex();
             connect(combo_oot_button_icons, &QComboBox::activated, this,
                     [this, prev_icon_index](int index) mutable {
-                        const bool was_pc_xbox = (prev_icon_index == 5);
-                        const bool is_pc_xbox = (index == 5);
-                        if (was_pc_xbox != is_pc_xbox) {
+                        const bool was_pc_layout = (prev_icon_index >= 5);
+                        const bool is_pc_layout = (index >= 5);
+                        if (was_pc_layout != is_pc_layout) {
                             player_controllers[0]->SwapFaceButtons();
                         }
                         prev_icon_index = index;

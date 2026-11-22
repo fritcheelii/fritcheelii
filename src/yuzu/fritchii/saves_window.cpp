@@ -1061,6 +1061,27 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
     slot_btns->addWidget(btn_clear_slot);
     layout->addLayout(slot_btns, row++, 0, 1, 2);
 
+    auto* ask_on_play_cb = new QCheckBox(
+        QObject::tr("Ask which save slot before playing (8-slot picker on Play)"), &dialog);
+    {
+        std::error_code ec;
+        ask_on_play_cb->setChecked(!fs::is_regular_file(slots_root / "skip_play_picker.txt", ec));
+    }
+    QObject::connect(ask_on_play_cb, &QCheckBox::toggled, &dialog, [slots_root](bool checked) {
+        std::error_code ec;
+        const fs::path flag = slots_root / "skip_play_picker.txt";
+        if (checked) {
+            fs::remove(flag, ec);
+        } else {
+            fs::create_directories(slots_root, ec);
+            std::ofstream out(flag, std::ios::trunc);
+            if (out) {
+                out << "1\n";
+            }
+        }
+    });
+    layout->addWidget(ask_on_play_cb, row++, 0, 1, 2);
+
     QObject::connect(btn_activate, &QPushButton::clicked, &dialog, [&] {
         if (blocked()) {
             return;
@@ -1895,19 +1916,21 @@ private:
 
 } // namespace
 
-bool ChooseOotSaveSlotBeforePlay(QWidget* parent, const std::function<bool()>& emulation_running) {
+bool ChooseOotSaveSlotBeforePlay(QWidget* parent, const std::function<bool()>& emulation_running,
+                                 bool force_show, bool launch_mode) {
     const fs::path fritchii = SaveRoot(Common::FS::GetEdenPath(Common::FS::EdenPath::NANDDir));
     const fs::path slots_root = OotSlotsRoot(fritchii);
     const fs::path nand_oot = OotActiveNandDir(fritchii);
     EnsureSlot1Seeded(fritchii, slots_root);
 
     std::error_code ec;
-    if (fs::is_regular_file(slots_root / "skip_play_picker.txt", ec)) {
+    if (!force_show && fs::is_regular_file(slots_root / "skip_play_picker.txt", ec)) {
         return true;
     }
 
     QDialog dialog(parent);
-    dialog.setWindowTitle(QObject::tr("Choose Save Slot — Zelda OoT"));
+    dialog.setWindowTitle(launch_mode ? QObject::tr("Choose Save Slot — Zelda OoT")
+                                      : QObject::tr("Choose Active Save Slot — Zelda OoT"));
     dialog.setWindowFlag(Qt::WindowContextHelpButtonHint, false);
     dialog.setMinimumWidth(680);
 
@@ -1915,9 +1938,13 @@ bool ChooseOotSaveSlotBeforePlay(QWidget* parent, const std::function<bool()>& e
     layout->setSpacing(10);
 
     auto* header = new QLabel(
-        QObject::tr("<b>Select which Save Slot to load for Zelda OoT</b><br>"
-                    "<span style='color:#96969e;font-size:12px;'>All 8 slots are ready to use — "
-                    "double-click a slot to launch immediately.</span>"),
+        launch_mode
+            ? QObject::tr("<b>Select which Save Slot to load for Zelda OoT</b><br>"
+                          "<span style='color:#96969e;font-size:12px;'>All 8 slots are ready to "
+                          "use — double-click a slot to launch immediately.</span>")
+            : QObject::tr("<b>Select which Save Slot should be active for Zelda OoT</b><br>"
+                          "<span style='color:#96969e;font-size:12px;'>All 8 slots are ready to "
+                          "use — double-click a slot to switch immediately.</span>"),
         &dialog);
     layout->addWidget(header);
 
@@ -2030,12 +2057,15 @@ bool ChooseOotSaveSlotBeforePlay(QWidget* parent, const std::function<bool()>& e
 
     auto* skip_cb =
         new QCheckBox(QObject::tr("Don't ask again (launch active slot directly)"), &dialog);
+    skip_cb->setVisible(launch_mode);
     layout->addWidget(skip_cb);
 
     auto* bottom = new QHBoxLayout;
     auto* manage_btn = new QPushButton(QObject::tr("Manage Saves..."), &dialog);
     auto* cancel_btn = new QPushButton(QObject::tr("Cancel"), &dialog);
-    auto* play_btn = new QPushButton(QObject::tr("Play Selected Slot"), &dialog);
+    auto* play_btn = new QPushButton(
+        launch_mode ? QObject::tr("Play Selected Slot") : QObject::tr("Use Selected Slot"),
+        &dialog);
     play_btn->setDefault(true);
     play_btn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #7c3aed; color: #ffffff; font-weight: 700; "

@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           retry() { local n; for n in 1 2 3 4; do "$@" && return 0; echo "::warning::attempt $n of '$*' failed; retrying" >&2; sleep $((n * 30)); done; return 1; }
-          tag="v5.2"
+          tag="v5.3"
           if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/$tag" >/dev/null 2>&1; then
             retry gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/$tag" \
               -f "sha=$GITHUB_SHA" -F "force=true"
@@ -218,12 +218,12 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path "build/release/bin/cheezyemu.exe") {
-            Move-Item -Force "build/release/bin/cheezyemu.exe" "build/release/bin/FritCheeLii v5.2.exe"
+            Move-Item -Force "build/release/bin/cheezyemu.exe" "build/release/bin/FritCheeLii v5.3.exe"
           }
-          if (-not (Test-Path "build/release/bin/FritCheeLii v5.2.exe")) {
-            throw "build/release/bin/FritCheeLii v5.2.exe was not produced"
+          if (-not (Test-Path "build/release/bin/FritCheeLii v5.3.exe")) {
+            throw "build/release/bin/FritCheeLii v5.3.exe was not produced"
           }
-          windeployqt --release --no-translations "build/release/bin/FritCheeLii v5.2.exe"
+          windeployqt --release --no-translations "build/release/bin/FritCheeLii v5.3.exe"
 
       - name: Upload Windows binary
         uses: actions/upload-artifact@v7
@@ -245,15 +245,15 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: FritCheeLii-windows-x86_64-pgo-${{ github.sha }}
-          path: "stage/FritCheeLii v5.2"
+          path: "stage/FritCheeLii v5.3"
 
       - name: Package release files
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
-          test -f "stage/FritCheeLii v5.2/FritCheeLii v5.2.exe"
-          (cd stage && zip -qr "${GITHUB_WORKSPACE}/dist/FritCheeLii-v5.2.zip" "FritCheeLii v5.2")
+          test -f "stage/FritCheeLii v5.3/FritCheeLii v5.3.exe"
+          (cd stage && zip -qr "${GITHUB_WORKSPACE}/dist/FritCheeLii-v5.3.zip" "FritCheeLii v5.3")
           ls -la dist
 
       - name: Create release
@@ -263,7 +263,7 @@ jobs:
         run: |
           set -euo pipefail
           retry() { local n; for n in 1 2 3 4; do "$@" && return 0; echo "::warning::attempt $n of '$*' failed; retrying" >&2; sleep $((n * 30)); done; return 1; }
-          tag="v5.2"
+          tag="v5.3"
           tag_sha=$(retry gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" --jq '.object.sha')
           if [ "$tag_sha" != "$GITHUB_SHA" ]; then
             echo "Release tag ${tag} points to $tag_sha instead of $GITHUB_SHA"
@@ -271,26 +271,22 @@ jobs:
           fi
           base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}"
           cat > notes.md <<EOF
-          # FritCheeLii v5.2
+          # FritCheeLii v5.3
 
           ## Download (Windows 64-bit · Clang 22.1.8 + ThinLTO + PGO)
-          - **[FritCheeLii-v5.2.zip](${base}/FritCheeLii-v5.2.zip)**
+          - **[FritCheeLii-v5.3.zip](${base}/FritCheeLii-v5.3.zip)**
 
-          Extraia o arquivo \`FritCheeLii-v5.2.zip\` — ele criará a pasta **\`FritCheeLii v5.2\`** contendo o executável **\`FritCheeLii v5.2.exe\`**.
+          Extraia o arquivo \`FritCheeLii-v5.3.zip\` — ele criará a pasta **\`FritCheeLii v5.3\`** contendo o executável **\`FritCheeLii v5.3.exe\`**.
 
-          ## What's New in v5.2
+          ## What's New in v5.3
+          - **Sleek Home Save Slot Pill + \`Saves\` Picker Toggle:** replaced the Home dropdown with a clean clickable \`Save: Slot N — Name\` pill button that opens the visual 4×2 8-slot thumbnail picker, and added the \`Ask which save slot before playing\` checkbox inside \`Saves\`
+          - **Full PC Layout Support for PlayStation & Steam Deck:** added \`PlayStation (PC Layout — ✕ Confirm)\` and \`Steam Deck (PC Layout — A Confirm)\` alongside \`Xbox (PC Layout — A Confirm)\`, all with automatic \`A↔B / X↔Y\` swap and physical diamond layout support via \`Common.blarc.zs\`
+
+          ## Highlights from v5.2
           - **Fast \`v4.2\` TextureCache Restored + Castle Town 4-Frame \`BadOverlap\` Fix:** keeps maximum FPS on 4–16 GB GPUs without touching live scene textures while preventing Castle Town dead shadow-map VRAM leaks
           - **Refined \`PerformanceOverlay\`:** top banner shows RAM bus/channel only (\`DDR4 2666 MHz (Dual Channel)\`), \`RAM\` row displays used / total GB, and removed frozen ACPI CPU temperature reading
-          - **Restored 1-Click \`30 FPS ↔ 60 FPS\` Status-Bar Toggle** from \`v4.2\` (custom caps available via \`FPS Limit\` in \`Settings → Graphics\`)
-          - **Automatic \`Xbox (PC Layout — A Confirm)\` Swap:** selecting it automatically swaps \`A↔B / X↔Y\` without a confirmation popup
-          - **8-Slot Save Selector on Home + Visual 4×2 Play Picker + Gold \`★ Manual\` Highlight:** choose any of the 8 Zelda OoT save slots right next to \`Play\` or via the visual 4×2 thumbnail picker when clicking \`Play\`, plus chronological 3×2 save preview with a gold \`★ Manual\` badge
-          - **Timestamped Log History + \`Help → Export Logs (.zip)...\`:** previous logs are archived with date/time in \`user/log/history/\` (keeping the 30 most recent) and can be exported as a single \`.zip\` from the \`Help\` menu
-
-          ## Highlights from v5.0 / v5.1
-          - **Zelda OoT Multi-Save Manager (8 Slots) + Triforce Save System:** live location thumbnail preview (\`caption.sav\`), Switch/Snapshot/Rename/Export, and cross-emulator auto-detection (Triforce/Hookshot, AkynoLeyend, NX2Saria/NX2navi, Ryujinx, Eden, Lichii, Yuzu)
-          - **Benchmark-Grade PerformanceOverlay:** dynamic top hardware banner (\`CPU | GPU | RAM DDRx MHz Channel\`), \`CPU Single Core %\` + \`GPU W • °C\`, and \`Limited by 1 Core\` detection
-          - **3-Tier Preset Picker:** choose \`Auto\`, \`Entry 4–6 GB\`, \`Mid-Range 8 GB\`, or \`High-End 12–16 GB+\` in \`Find Best Settings for This PC...\`
-          - **Synced \`Auto / Dynamic\` OoT FSR Preset Label** & clean \`Credits\` / \`About\` / \`No Sharpening (Faster, Recommended)\`
+          - **Restored 1-Click \`30 FPS ↔ 60 FPS\` Status-Bar Toggle** from \`v4.2\`
+          - **8-Slot Visual 4×2 Save Picker + Gold \`★ Manual\` Highlight** & **Timestamped Log History + \`Help → Export Logs (.zip)...\`**
 
           ## Credits
           Built on GPL open-source code with advancements from **Fritchii v6.5 (Frizti & Bakemono)**, **CheezyEmu**, **Lichii**, **Triforce**, **Eglantine**, **Eden / Yuzu**, and **Dark (Dynamic FPS)**.
@@ -301,5 +297,5 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --verify-tag \
             --prerelease \
-            --title "FritCheeLii v5.2" \
+            --title "FritCheeLii v5.3" \
             --notes-file notes.md

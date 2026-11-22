@@ -8,7 +8,6 @@
 
 #include <QApplication>
 #include <QBoxLayout>
-#include <QComboBox>
 #include <QDir>
 #include <QEvent>
 #include <QFileInfo>
@@ -384,27 +383,23 @@ QWidget* Home::MakePage() {
     });
     play_row->addWidget(play);
 
-    save_slot_combo = new QComboBox(page);
-    save_slot_combo->setCursor(Qt::PointingHandCursor);
-    save_slot_combo->setFocusPolicy(Qt::NoFocus);
-    save_slot_combo->setToolTip(
-        tr("Select which of the 8 Zelda OoT Multi-Save slots is active before playing."));
-    save_slot_combo->setStyleSheet(QStringLiteral(
-        "QComboBox { background-color: #181820; color: #f4f4f0; border: 1px solid #2e2e3a; "
-        "border-radius: 8px; padding: 0 12px; min-height: 40px; min-width: 240px; font-size: 13px; }"
-        "QComboBox:hover { border-color: #a78bfa; }"
-        "QComboBox::drop-down { border: none; width: 24px; }"
-        "QComboBox QAbstractItemView { background-color: #181820; color: #f4f4f0; "
-        "selection-background-color: #2b2444; border: 1px solid #2e2e3a; }"));
-    connect(save_slot_combo, &QComboBox::activated, this, [this](int idx) {
+    save_slot_button = new QPushButton(page);
+    save_slot_button->setCursor(Qt::PointingHandCursor);
+    save_slot_button->setFocusPolicy(Qt::NoFocus);
+    save_slot_button->setToolTip(
+        tr("Active Zelda OoT save slot. Click to choose from all 8 slots with previews."));
+    save_slot_button->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #181820; color: #e4e4ec; border: 1px solid #2e2e3a; "
+        "border-radius: 8px; padding: 0 14px; min-height: 40px; font-size: 13px; }"
+        "QPushButton:hover { border-color: #a78bfa; color: #ffffff; }"));
+    connect(save_slot_button, &QPushButton::clicked, this, [this] {
         if (hooks.emulation_running && hooks.emulation_running()) {
-            RefreshSaveSlots();
             return;
         }
-        SwitchOotSaveSlot(idx + 1);
+        ChooseOotSaveSlotBeforePlay(window, hooks.emulation_running, true, false);
         RefreshSaveSlots();
     });
-    play_row->addWidget(save_slot_combo);
+    play_row->addWidget(save_slot_button);
     play_row->addStretch(1);
     side->addLayout(play_row);
     side->addStretch(1);
@@ -572,33 +567,34 @@ bool Home::eventFilter(QObject* watched, QEvent* event) {
 }
 
 void Home::RefreshSaveSlots() {
-    if (!save_slot_combo) {
+    if (!save_slot_button) {
         return;
     }
     if (hero_id != OcarinaOfTime) {
-        save_slot_combo->hide();
+        save_slot_button->hide();
         return;
     }
     const auto save_slots = ListOotSaveSlots();
-    save_slot_combo->blockSignals(true);
-    save_slot_combo->clear();
-    int active_idx = 0;
-    for (int i = 0; i < static_cast<int>(save_slots.size()); ++i) {
-        const auto& s = save_slots[static_cast<size_t>(i)];
-        const QString status = s.has_data
-                                   ? (s.date_str.isEmpty() ? tr("Saved") : s.date_str)
-                                   : tr("Empty");
-        save_slot_combo->addItem(
-            tr("Slot %1 — %2 (%3)").arg(s.slot).arg(s.name, status));
+    if (save_slots.empty()) {
+        save_slot_button->hide();
+        return;
+    }
+    const OotSlotBrief* active = &save_slots.front();
+    for (const auto& s : save_slots) {
         if (s.active) {
-            active_idx = i;
+            active = &s;
+            break;
         }
     }
-    if (!save_slots.empty()) {
-        save_slot_combo->setCurrentIndex(active_idx);
-    }
-    save_slot_combo->blockSignals(false);
-    save_slot_combo->show();
+    const QString default_name = tr("Slot %1").arg(active->slot);
+    const QString label =
+        (active->name == default_name)
+            ? tr("Save: Slot %1 (%2)")
+                  .arg(active->slot)
+                  .arg(active->has_data ? tr("Saved") : tr("Empty"))
+            : tr("Save: Slot %1 — %2").arg(active->slot).arg(active->name);
+    save_slot_button->setText(label);
+    save_slot_button->show();
 }
 
 } // namespace FritchiiUi
