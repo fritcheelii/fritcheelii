@@ -2695,8 +2695,8 @@ void Call(Core::System& system, u32 imm) {
             LOG_INFO(Kernel_SVC, "svc 0x18 t{} waits on{}", GetCurrentThread(kernel).GetThreadId(), list);
         }
     }
-    if (CallNx2OotPollBackoff(system, imm)) {
-        // Ocarina of Time resource poll backoff (svc 0xF3, svc_nx2_oot_poll.cpp).
+    if (CallNx2OotPollBackoff(system, imm) || CallNx2OotChangebankHold(system, imm, args)) {
+        // Ocarina of Time built-in performance SVCs (svc 0xF3 / 0xF4, svc_nx2_oot_poll.cpp).
     } else if (imm == 0x80) {
         // Switch 2 only: svcSetGpuMemoryAttribute(address, size, mask, attr). nn::gpu::sdk and
         // nn::gs native memory set the new "GPU accessible" attribute (0x20) before registering

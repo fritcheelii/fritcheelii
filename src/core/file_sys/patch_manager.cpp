@@ -326,6 +326,31 @@ constexpr std::array TEX_GAP_RECORDS{
     BuiltinPatchRecord{0x3C46DD0, TEX_GAP_STUB, {}, true},
 };
 
+// Neighbour map preload hold (ported from NX2Saria changebank_hold): holds the preloaded
+// neighbouring map in OptimizeChangeBank for 2 s when walking/turning in overlapping load radii
+// (e.g. Hyrule Market) via svc #0xf4, avoiding repeated cancelled background loads on 4-core CPUs.
+constexpr std::array<u8, 4> CHANGEBANK_ORIG{0x4A, 0x05, 0x00, 0x91}; // add x10, x10, #1
+constexpr std::array<u8, 4> CHANGEBANK_HOOK{0x36, 0xB4, 0x26, 0x14}; // b 0x3c46e00
+constexpr std::array<u8, 52> CHANGEBANK_STUB{
+    0x4A, 0x05, 0x00, 0x91, // add x10, x10, #1
+    0x5F, 0x41, 0x00, 0xF1, // cmp x10, #16
+    0x41, 0x01, 0x00, 0x54, // b.ne 0x3c46e30
+    0xE0, 0x07, 0xBE, 0xA9, // stp x0, x1, [sp, #-32]!
+    0xE2, 0x0F, 0x01, 0xA9, // stp x2, x3, [sp, #16]
+    0xE0, 0x03, 0x13, 0xAA, // mov x0, x19
+    0xE1, 0x03, 0x0F, 0x2A, // mov w1, w15
+    0xE2, 0x03, 0x11, 0x2A, // mov w2, w17
+    0x81, 0x1E, 0x00, 0xD4, // svc #0xf4
+    0xEF, 0x03, 0x00, 0x2A, // mov w15, w0
+    0xE2, 0x0F, 0x41, 0xA9, // ldp x2, x3, [sp, #16]
+    0xE0, 0x07, 0xC2, 0xA8, // ldp x0, x1, [sp], #32
+    0xBF, 0x4B, 0xD9, 0x17, // b 0x3299d2c
+};
+constexpr std::array CHANGEBANK_HOLD_RECORDS{
+    BuiltinPatchRecord{0x3299D28, CHANGEBANK_HOOK, CHANGEBANK_ORIG},
+    BuiltinPatchRecord{0x3C46E00, CHANGEBANK_STUB, {}, true},
+};
+
 bool TestShadowStepsEnabled() {
     if (const char* v = std::getenv("FRITCHII_SHADOW_STEPS"); v != nullptr && *v != '\0') {
         return *v != '0';
@@ -352,6 +377,13 @@ bool TestTexTidy1sEnabled() {
         return *v != '0';
     }
     return Settings::values.test_tex_tidy_1s.GetValue();
+}
+
+bool TestChangebankHoldEnabled() {
+    if (const char* v = std::getenv("FRITCHII_CHANGEBANK_HOLD"); v != nullptr && *v != '\0') {
+        return *v != '0';
+    }
+    return Settings::values.test_changebank_hold.GetValue();
 }
 
 constexpr std::array BUILTIN_PATCHES{
@@ -436,6 +468,14 @@ constexpr std::array BUILTIN_PATCHES{
         .state_offset = 0x4E9EFA0,
         .state_size = 8,
         .setting_enabled = &TestTexTidy1sEnabled,
+    },
+    BuiltinPatch{
+        .name = "Neighbour Map Preload Hold (built-in, NX2Saria)",
+        .title_id = 0x0400486024DEC000,
+        .module = "main",
+        .build_id = "E0F3CCFAF50065AE4EA01EB5AEB13B1A45DA3348",
+        .records = CHANGEBANK_HOLD_RECORDS,
+        .setting_enabled = &TestChangebankHoldEnabled,
     },
 };
 
