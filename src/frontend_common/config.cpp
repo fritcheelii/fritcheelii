@@ -142,7 +142,7 @@ void Config::SetUpIni() {
         BeginGroup(Settings::TranslateCategory(Settings::Category::Renderer));
         seed(Settings::values.scaling_filter, ToString(u32(Settings::ScalingFilter::Fsr)));
         seed(Settings::values.anti_aliasing, ToString(u32(Settings::AntiAliasing::Smaa)));
-        seed(Settings::values.fsr_sharpening_slider, ToString(30));
+        seed(Settings::values.fsr_sharpening_slider, ToString(140));
         seed(Settings::values.post_shader_enabled, ToString(false));
         seed(Settings::values.gpu_accuracy, ToString(u32(Settings::GpuAccuracy::Low)));
         seed(Settings::values.nvdec_emulation, ToString(u32(Settings::NvdecEmulation::Gpu)));

@@ -324,6 +324,9 @@ void LoadingScreen::OnLoadProgress(VideoCore::LoadCallbackStage stage, std::size
         previous_stage = stage;
         // reset back to fast shader compiling since the stage changed
         slow_shader_compile_start = false;
+        smoothed_eta_ms = -1.0;
+        last_eta_update = {};
+        cached_estimate.clear();
     }
     // update the max of the progress bar if the number of shaders change
     if (total != previous_total) {
@@ -343,17 +346,33 @@ void LoadingScreen::OnLoadProgress(VideoCore::LoadCallbackStage stage, std::size
             slow_shader_compile_start = true;
             slow_shader_first_value = value;
         }
-        // only calculate an estimate time after a second has passed since stage change
+        // only calculate an estimate time after a 3s warmup and 25+ shaders, smoothed via EMA
         const auto diff = duration_cast<milliseconds>(now - slow_shader_start);
-        if (diff > seconds{1} && value > slow_shader_first_value) {
-            const auto eta_mseconds =
-                static_cast<long>(static_cast<double>(total - slow_shader_first_value) /
-                                  (value - slow_shader_first_value) * diff.count());
-            estimate =
-                tr("Estimated Time %1")
-                    .arg(QTime(0, 0, 0, 0)
-                             .addMSecs(std::max<long>(eta_mseconds - diff.count() + 1000, 1000))
-                             .toString(QStringLiteral("mm:ss")));
+        if (diff >= seconds{3} && value >= slow_shader_first_value + 25 && total > value) {
+            if (smoothed_eta_ms < 0.0 || (now - last_eta_update >= milliseconds{1500})) {
+                const double remaining_ms =
+                    static_cast<double>(total - value) * static_cast<double>(diff.count()) /
+                    static_cast<double>(value - slow_shader_first_value);
+                smoothed_eta_ms = (smoothed_eta_ms < 0.0)
+                                      ? remaining_ms
+                                      : (0.75 * smoothed_eta_ms + 0.25 * remaining_ms);
+                const long long total_sec =
+                    std::max<long long>(1, static_cast<long long>(smoothed_eta_ms / 1000.0 + 0.5));
+                const long long hrs = total_sec / 3600;
+                const long long mins = (total_sec % 3600) / 60;
+                const long long secs = total_sec % 60;
+                const QString formatted =
+                    hrs > 0 ? QStringLiteral("%1:%2:%3")
+                                  .arg(hrs)
+                                  .arg(mins, 2, 10, QLatin1Char('0'))
+                                  .arg(secs, 2, 10, QLatin1Char('0'))
+                            : QStringLiteral("%1:%2")
+                                  .arg(mins, 2, 10, QLatin1Char('0'))
+                                  .arg(secs, 2, 10, QLatin1Char('0'));
+                cached_estimate = tr("Estimated Time %1").arg(formatted);
+                last_eta_update = now;
+            }
+            estimate = cached_estimate;
         }
     }
 

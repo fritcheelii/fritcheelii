@@ -104,6 +104,9 @@ private:
     std::chrono::steady_clock::time_point slow_shader_start;
     std::chrono::steady_clock::time_point previous_time;
     std::size_t slow_shader_first_value = 0;
+    double smoothed_eta_ms = -1.0;
+    std::chrono::steady_clock::time_point last_eta_update{};
+    QString cached_estimate;
 };
 
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)

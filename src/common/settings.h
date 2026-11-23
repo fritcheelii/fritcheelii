@@ -404,7 +404,7 @@ struct Values {
 #ifdef __ANDROID__
                                                        0,
 #else
-                                                       30,
+                                                       140,
 #endif
                                                        0,
                                                        200,
