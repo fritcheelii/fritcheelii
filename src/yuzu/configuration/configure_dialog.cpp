@@ -138,6 +138,13 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
                "freeing CPU core cycles on 4-core CPUs (e.g. i3-10105F). Requires game restart."),
             Settings::values.test_poll_backoff.GetValue());
 
+        auto* cb_changebank = add_switch(
+            tr("Neighbour Map Preload Hold — 2s (Built-in OoT Patch)"),
+            tr("Holds OoT's preloaded neighbouring area for 2 seconds when walking or turning in "
+               "overlapping areas like Hyrule Market / Field (NX2Saria), avoiding repeated "
+               "cancelled background loads on 4-core CPUs. Requires game restart."),
+            Settings::values.test_changebank_hold.GetValue());
+
         auto* cb_jit = add_switch(
             tr("JIT Block List Warm-Up (Fritchii)"),
             tr("Records compiled ARM64 blocks per game session and pre-warms them on idle cores "
@@ -175,11 +182,12 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
         scroll->setWidget(content);
         outer->addWidget(scroll);
 
-        apply_graphics_test = [cb_mip, cb_shadow, cb_poll, cb_jit, cb_occl, cb_tidy, cb_zstd,
-                               cb_vram_gc]() {
+        apply_graphics_test = [cb_mip, cb_shadow, cb_poll, cb_changebank, cb_jit, cb_occl, cb_tidy,
+                               cb_zstd, cb_vram_gc]() {
             Settings::values.test_4k_mip_cap.SetValue(cb_mip->isChecked());
             Settings::values.test_shadow_size_steps.SetValue(cb_shadow->isChecked());
             Settings::values.test_poll_backoff.SetValue(cb_poll->isChecked());
+            Settings::values.test_changebank_hold.SetValue(cb_changebank->isChecked());
             Settings::values.test_jit_block_warmup.SetValue(cb_jit->isChecked());
             Settings::values.test_occlusion_off.SetValue(cb_occl->isChecked());
             Settings::values.test_tex_tidy_1s.SetValue(cb_tidy->isChecked());

@@ -457,6 +457,8 @@ struct Values {
     Setting<bool> test_shadow_size_steps{linkage, false, "test_shadow_size_steps",
                                          Category::Miscellaneous};
     Setting<bool> test_poll_backoff{linkage, true, "test_poll_backoff", Category::Miscellaneous};
+    Setting<bool> test_changebank_hold{linkage, true, "test_changebank_hold",
+                                       Category::Miscellaneous};
     Setting<bool> test_occlusion_off{linkage, false, "test_occlusion_off",
                                      Category::Miscellaneous};
     Setting<bool> test_tex_tidy_1s{linkage, false, "test_tex_tidy_1s", Category::Miscellaneous};

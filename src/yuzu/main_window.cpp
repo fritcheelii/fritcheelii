@@ -5042,6 +5042,7 @@ void MainWindow::OnRestorePreviousSettings() {
     Settings::values.test_4k_mip_cap.SetValue(false);
     Settings::values.test_shadow_size_steps.SetValue(false);
     Settings::values.test_poll_backoff.SetValue(true);
+    Settings::values.test_changebank_hold.SetValue(true);
     Settings::values.test_occlusion_off.SetValue(false);
     Settings::values.test_tex_tidy_1s.SetValue(false);
     Settings::values.test_jit_block_warmup.SetValue(false);

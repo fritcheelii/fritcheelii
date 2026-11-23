@@ -32,7 +32,37 @@
 #include "qt_common/config/uisettings.h"
 
 #ifdef _WIN32
+#include <cstdlib>
+#include <filesystem>
+#include <windows.h>
 #include <QScreen>
+
+static void ConfigurePortableNvidiaShaderCache() {
+    if (const char* disable = std::getenv("FRITCHII_NVIDIA_CACHE_DIR");
+        disable != nullptr && *disable == '0') {
+        return;
+    }
+    const auto cache_dir =
+        Common::FS::GetEdenPath(Common::FS::EdenPath::CacheDir) / "nvidia-cache";
+    std::error_code ec;
+    std::filesystem::create_directories(cache_dir, ec);
+    if (ec) {
+        return;
+    }
+    const auto set_if_unset = [](const wchar_t* name, const char* ascii_name,
+                                 const std::wstring& value) {
+        if (std::getenv(ascii_name) != nullptr) {
+            return;
+        }
+        SetEnvironmentVariableW(name, value.c_str());
+        _wputenv_s(name, value.c_str());
+    };
+    set_if_unset(L"__GL_SHADER_DISK_CACHE_PATH", "__GL_SHADER_DISK_CACHE_PATH",
+                 cache_dir.wstring());
+    set_if_unset(L"__GL_SHADER_DISK_CACHE_SIZE", "__GL_SHADER_DISK_CACHE_SIZE", L"8589934592");
+    set_if_unset(L"__GL_SHADER_DISK_CACHE_SKIP_CLEANUP", "__GL_SHADER_DISK_CACHE_SKIP_CLEANUP",
+                 L"1");
+}
 
 static void OverrideWindowsFont() {
     // Qt5 chooses these fonts on Windows and they have fairly ugly alphanumeric/cyrillic characters
@@ -87,6 +117,9 @@ static Qt::HighDpiScaleFactorRoundingPolicy GetHighDpiRoundingPolicy() {
 int main(int argc, char* argv[]) {
     Common::InstallCommitLimitNewHandler();
     LoadNx2Switches(argv[0]);
+#ifdef _WIN32
+    ConfigurePortableNvidiaShaderCache();
+#endif
 #if YUZU_ROOM
     bool launch_room = false;
     for (int i = 1; i < argc; i++) {
