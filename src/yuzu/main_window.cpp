@@ -1677,9 +1677,6 @@ void MainWindow::SetDefaultUIGeometry() {
 void MainWindow::RestoreUIState() {
     setWindowFlags(windowFlags() & ~Qt::FramelessWindowHint);
     restoreGeometry(UISettings::values.geometry);
-    if (UISettings::values.geometry.isEmpty()) {
-        setWindowState(windowState() | Qt::WindowMaximized);
-    }
     // Work-around because the games list isn't supposed to be full screen
     if (isFullScreen()) {
         showNormal();
@@ -5043,7 +5040,7 @@ void MainWindow::OnRestorePreviousSettings() {
     Settings::values.oot_30fps.SetValue(false);
     Settings::values.test_4k_mip_cap.SetValue(false);
     Settings::values.test_shadow_size_steps.SetValue(false);
-    Settings::values.test_poll_backoff.SetValue(false);
+    Settings::values.test_poll_backoff.SetValue(true);
     Settings::values.test_occlusion_off.SetValue(false);
     Settings::values.test_tex_tidy_1s.SetValue(false);
     Settings::values.test_jit_block_warmup.SetValue(false);

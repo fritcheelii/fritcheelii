@@ -1577,7 +1577,16 @@ std::shared_ptr<PipelineCache::RecipeRun> PipelineCache::AddRecipeJobs(
                 throw std::ios_base::failure("environment outside the file");
             }
         }
-        offsets.reserve(records);
+        struct RecipeEntry {
+            u64 offset{};
+            u64 score{};
+            std::array<u32, Maxwell::MaxShaderProgram> ids{};
+            u8 count{};
+            bool compute{};
+        };
+        std::vector<RecipeEntry> entries;
+        entries.reserve(records);
+        std::vector<u32> env_freq(environments, 0);
         u64 at = RecipeFileHeader + u64{environments} * 16;
         for (u32 record = 0; record < records; ++record) {
             std::array<u8, 4> head;
@@ -1588,13 +1597,75 @@ std::shared_ptr<PipelineCache::RecipeRun> PipelineCache::AddRecipeJobs(
             if (head[0] > 1 || head[1] == 0 || head[1] > Maxwell::MaxShaderProgram) {
                 throw std::ios_base::failure("unknown record");
             }
-            offsets.push_back(at);
-            at += head.size() + u64{head[1]} * 4 + key_size;
-            if (at > end) {
+            const u64 next_at = at + head.size() + u64{head[1]} * 4 + key_size;
+            if (next_at > end) {
                 throw std::ios_base::failure("record outside the file");
             }
+            RecipeEntry entry{
+                .offset = at,
+                .score = 0,
+                .ids = {},
+                .count = head[1],
+                .compute = head[0] == 1,
+            };
+            in.read(reinterpret_cast<char*>(entry.ids.data()), std::streamsize{head[1]} * 4);
+            for (u8 s = 0; s < entry.count; ++s) {
+                if (entry.ids[s] < environments) {
+                    ++env_freq[entry.ids[s]];
+                }
+            }
+            entries.push_back(entry);
+            at = next_at;
         }
-        run->records = records;
+
+        // Fast Pareto Shader Precache: prioritize all compute + top ~15k most-reused graphics
+        // pipelines (~10x faster first launch); rare shaders compile smoothly on demand.
+        const bool full_precache = std::getenv("EDEN_NX2_PRECACHE_FULL") != nullptr;
+        constexpr size_t MaxParetoPipelines = 15000;
+        if (!full_precache && entries.size() > MaxParetoPipelines) {
+            std::vector<RecipeEntry> graphics_entries;
+            graphics_entries.reserve(entries.size());
+            size_t compute_count = 0;
+            for (auto& entry : entries) {
+                if (entry.compute) {
+                    offsets.push_back(entry.offset);
+                    ++compute_count;
+                } else {
+                    u64 score = 0;
+                    for (u8 s = 0; s < entry.count; ++s) {
+                        if (entry.ids[s] < environments) {
+                            score += env_freq[entry.ids[s]];
+                        }
+                    }
+                    entry.score = score;
+                    graphics_entries.push_back(entry);
+                }
+            }
+            const size_t graphics_budget =
+                MaxParetoPipelines > compute_count ? MaxParetoPipelines - compute_count : 0;
+            const size_t take = (std::min)(graphics_budget, graphics_entries.size());
+            if (take < graphics_entries.size()) {
+                std::partial_sort(
+                    graphics_entries.begin(),
+                    graphics_entries.begin() + static_cast<ptrdiff_t>(take),
+                    graphics_entries.end(),
+                    [](const RecipeEntry& a, const RecipeEntry& b) { return a.score > b.score; });
+            }
+            for (size_t i = 0; i < take; ++i) {
+                offsets.push_back(graphics_entries[i].offset);
+            }
+            std::sort(offsets.begin(), offsets.end());
+            LOG_INFO(Render_Vulkan,
+                     "Shader recipe (Fast Pareto): selected {} of {} pipelines ({} compute + {} "
+                     "top graphics) from {}",
+                     offsets.size(), records, compute_count, take, name);
+        } else {
+            offsets.reserve(entries.size());
+            for (const auto& entry : entries) {
+                offsets.push_back(entry.offset);
+            }
+        }
+        run->records = static_cast<u32>(offsets.size());
     } catch (const std::exception& e) {
         LOG_WARNING(Render_Vulkan, "Shader recipe: reading {} failed: {}", name, e.what());
         return nullptr;
