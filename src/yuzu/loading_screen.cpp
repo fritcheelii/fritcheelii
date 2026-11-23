@@ -319,12 +319,17 @@ void LoadingScreen::OnLoadProgress(VideoCore::LoadCallbackStage stage, std::size
     if (stage != previous_stage) {
         // The cheese bar shows from the first stage on; the old bar stays hidden.
         cheese_progress->setVisible(true);
-        skip_button->setVisible(stage == VideoCore::LoadCallbackStage::Warm);
+        // Mandatory Fast Essential on Play: hide Skip during normal Play launch; show Skip/Cancel
+        // only when pre-building shaders from the standalone "Shader Cache" button on Home.
+        skip_button->setVisible(stage == VideoCore::LoadCallbackStage::Warm &&
+                                VideoCommon::ShaderWarm::IsStandaloneBuildOnly());
         skip_button->setEnabled(true);
         previous_stage = stage;
         // reset back to fast shader compiling since the stage changed
         slow_shader_compile_start = false;
         smoothed_eta_ms = -1.0;
+        min_eta_sec = -1;
+        last_eta_value = 0;
         last_eta_update = {};
         cached_estimate.clear();
     }
@@ -346,18 +351,29 @@ void LoadingScreen::OnLoadProgress(VideoCore::LoadCallbackStage stage, std::size
             slow_shader_compile_start = true;
             slow_shader_first_value = value;
         }
-        // only calculate an estimate time after a 3s warmup and 25+ shaders, smoothed via EMA
+        // Calculate a monotonic (non-increasing) ETA after a 4s warmup and 40+ shaders:
+        // Pad the initial estimate by 15% for background system load, then strictly decrease so
+        // the countdown never jumps back up (if the PC is fast, it simply counts down faster).
         const auto diff = duration_cast<milliseconds>(now - slow_shader_start);
-        if (diff >= seconds{3} && value >= slow_shader_first_value + 25 && total > value) {
-            if (smoothed_eta_ms < 0.0 || (now - last_eta_update >= milliseconds{1500})) {
+        if (diff >= seconds{4} && value >= slow_shader_first_value + 40 && total > value) {
+            if (min_eta_sec < 0 || (now - last_eta_update >= milliseconds{1000})) {
                 const double remaining_ms =
                     static_cast<double>(total - value) * static_cast<double>(diff.count()) /
                     static_cast<double>(value - slow_shader_first_value);
                 smoothed_eta_ms = (smoothed_eta_ms < 0.0)
-                                      ? remaining_ms
+                                      ? (remaining_ms * 1.15)
                                       : (0.75 * smoothed_eta_ms + 0.25 * remaining_ms);
-                const long long total_sec =
+                const long long candidate_sec =
                     std::max<long long>(1, static_cast<long long>(smoothed_eta_ms / 1000.0 + 0.5));
+                if (min_eta_sec < 0) {
+                    min_eta_sec = candidate_sec;
+                } else if (candidate_sec < min_eta_sec) {
+                    min_eta_sec = candidate_sec;
+                } else if (value > last_eta_value && min_eta_sec > 1) {
+                    --min_eta_sec;
+                }
+                last_eta_value = value;
+                const long long total_sec = min_eta_sec;
                 const long long hrs = total_sec / 3600;
                 const long long mins = (total_sec % 3600) / 60;
                 const long long secs = total_sec % 60;
@@ -379,7 +395,7 @@ void LoadingScreen::OnLoadProgress(VideoCore::LoadCallbackStage stage, std::size
     // update labels and progress bar
     if (stage == VideoCore::LoadCallbackStage::Warm && total == 0) {
         // Before the count is known: the game's files are read for their shader programs.
-        ui->stage->setText(tr("Gathering this game's shaders (once, about a minute)..."));
+        ui->stage->setText(tr("Gathering this game's shaders (just once, one moment)..."));
         ui->progress_bar->setRange(0, 0);
     } else if (stage == VideoCore::LoadCallbackStage::Build ||
                stage == VideoCore::LoadCallbackStage::Warm) {

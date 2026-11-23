@@ -278,6 +278,7 @@ void WriteHeader(std::ofstream& out) {
 
 std::atomic<bool> warm_before_start{false};
 std::atomic<bool> skip_warm{false};
+std::atomic<StandaloneBuildMode> standalone_build_mode{StandaloneBuildMode::None};
 
 /// Records `entries` for the finished precache file at `warm_file` (see WarmCountPath).
 void WriteWarmCount(const fs::path& warm_file, u64 entries) {
@@ -375,6 +376,22 @@ void RequestSkipWarm() {
 
 bool TakeSkipWarm() {
     return skip_warm.exchange(false, std::memory_order_relaxed);
+}
+
+void SetStandaloneBuildMode(StandaloneBuildMode mode) {
+    standalone_build_mode.store(mode, std::memory_order_relaxed);
+}
+
+StandaloneBuildMode GetStandaloneBuildMode() {
+    return standalone_build_mode.load(std::memory_order_relaxed);
+}
+
+bool IsStandaloneBuildOnly() {
+    return standalone_build_mode.load(std::memory_order_relaxed) != StandaloneBuildMode::None;
+}
+
+bool IsFullCacheRequested() {
+    return standalone_build_mode.load(std::memory_order_relaxed) == StandaloneBuildMode::FullCache;
 }
 
 fs::path PrecachedPipelinesPath(u64 title_id) {
