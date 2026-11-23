@@ -108,7 +108,7 @@ void ForEachRecommendedSetting(Values& config, const HostProfile& host, Func&& f
     entry(config.async_presentation, true);
     entry(config.scaling_filter, ScalingFilter::Fsr);
     entry(config.anti_aliasing, AntiAliasing::Smaa);
-    entry(config.fsr_sharpening_slider, 30);
+    entry(config.fsr_sharpening_slider, 140);
     entry(config.post_shader_enabled, false);
     entry(config.oot_anti_aliasing, OotAntiAliasing::NoSharpening);
     entry(config.sink_id, AudioEngine::Cubeb);

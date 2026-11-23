@@ -1677,6 +1677,9 @@ void MainWindow::SetDefaultUIGeometry() {
 void MainWindow::RestoreUIState() {
     setWindowFlags(windowFlags() & ~Qt::FramelessWindowHint);
     restoreGeometry(UISettings::values.geometry);
+    if (UISettings::values.geometry.isEmpty()) {
+        setWindowState(windowState() | Qt::WindowMaximized);
+    }
     // Work-around because the games list isn't supposed to be full screen
     if (isFullScreen()) {
         showNormal();

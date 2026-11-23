@@ -1105,8 +1105,9 @@ void PatchManager::ApplyLayeredFS(VirtualFile& romfs, ContentRecordType type) co
                 "Common.Product.100.Nin_Ounce_NVN2.bntx.zs");
             const bool has_blarc =
                 (style_idx < 5) ||
-                std::filesystem::exists(style_path / "UI" / "Layout2Archive" /
-                                        "Common.Product.100.Nin_Ounce_NVN2.blarc.zs");
+                (std::filesystem::exists(style_path / "UI" / "Layout2Archive" /
+                                         "Common.Product.100.Nin_Ounce_NVN2.blarc.zs") &&
+                 std::filesystem::exists(style_path / ".patch_v2"));
             if (!has_bntx || !has_blarc) {
                 extracted_romfs = ExtractRomFS(romfs);
                 if (extracted_romfs != nullptr) {

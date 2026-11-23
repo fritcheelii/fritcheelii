@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstring>
 #include <fstream>
@@ -67,7 +68,8 @@ u32 ReadU32LE(std::span<const u8> buf, size_t off) {
            (static_cast<u32>(buf[off + 2]) << 16) | (static_cast<u32>(buf[off + 3]) << 24);
 }
 
-bool ParseSarcEntries(std::span<const u8> buf, std::unordered_map<std::string, SarcSlice>& out) {
+bool ParseSarcEntries(std::span<const u8> buf,
+                      std::unordered_map<std::string, std::vector<SarcSlice>>& out) {
     if (buf.size() < 32 || std::memcmp(buf.data(), "SARC", 4) != 0) {
         return false;
     }
@@ -105,7 +107,7 @@ bool ParseSarcEntries(std::span<const u8> buf, std::unordered_map<std::string, S
         }
         std::string name(reinterpret_cast<const char*>(buf.data() + name_off),
                          static_cast<size_t>(nul - (buf.data() + name_off)));
-        out.emplace(std::move(name), SarcSlice{data_off + start, end - start});
+        out[std::move(name)].push_back(SarcSlice{data_off + start, end - start});
     }
     return true;
 }
@@ -247,7 +249,8 @@ bool EnsureOoTButtonIconsGenerated(const VirtualDir& romfs_dir,
     const bool need_bntx = !FileExistsNonEmpty(bntx_out);
     const bool need_font = !FileExistsNonEmpty(font_out);
     const bool need_rsize = !FileExistsNonEmpty(rsize_out);
-    const bool need_blarc = (style_idx >= 5) && !FileExistsNonEmpty(blarc_out);
+    const bool need_blarc = (style_idx >= 5) && (!FileExistsNonEmpty(blarc_out) ||
+                                                !FileExistsNonEmpty(style_output_dir / ".patch_v2"));
 
     if (!need_bntx && !need_font && !need_rsize && !need_blarc) {
         return true;
@@ -269,18 +272,19 @@ bool EnsureOoTButtonIconsGenerated(const VirtualDir& romfs_dir,
         LOG_WARNING(Loader, "OoT button patcher: failed to decompress ZsDic.pack.zs");
         return false;
     }
-    std::unordered_map<std::string, SarcSlice> zsdic_entries;
+    std::unordered_map<std::string, std::vector<SarcSlice>> zsdic_entries;
     if (!ParseSarcEntries(zsdic_sarc, zsdic_entries)) {
         LOG_WARNING(Loader, "OoT button patcher: failed to parse ZsDic.pack SARC");
         return false;
     }
     const auto zs_it = zsdic_entries.find("zs.zsdic");
-    if (zs_it == zsdic_entries.end()) {
+    if (zs_it == zsdic_entries.end() || zs_it->second.empty()) {
         LOG_WARNING(Loader, "OoT button patcher: zs.zsdic missing in ZsDic.pack");
         return false;
     }
     std::unique_ptr<ZSTD_DDict, ZstdDDictDeleter> zs_dict(
-        ZSTD_createDDict(zsdic_sarc.data() + zs_it->second.offset, zs_it->second.size));
+        ZSTD_createDDict(zsdic_sarc.data() + zs_it->second.front().offset,
+                         zs_it->second.front().size));
     if (!zs_dict) {
         LOG_WARNING(Loader, "OoT button patcher: ZSTD_createDDict failed");
         return false;
@@ -383,29 +387,38 @@ bool EnsureOoTButtonIconsGenerated(const VirtualDir& romfs_dir,
             LOG_WARNING(Loader, "OoT button patcher: failed to decompress Common.blarc.zs");
             return false;
         }
-        std::unordered_map<std::string, SarcSlice> blarc_entries;
+        std::unordered_map<std::string, std::vector<SarcSlice>> blarc_entries;
         if (!ParseSarcEntries(raw, blarc_entries)) {
             LOG_WARNING(Loader, "OoT button patcher: failed to parse Common.blarc SARC");
             return false;
         }
         for (const auto& p : OoTButtonPatchData::BlarcPatches) {
             const auto it = blarc_entries.find(p.entry_name);
-            if (it == blarc_entries.end() || p.offset >= it->second.size) {
+            if (it == blarc_entries.end() || it->second.empty()) {
                 LOG_WARNING(Loader, "OoT button patcher: missing blarc entry {}", p.entry_name);
                 return false;
             }
-            const size_t abs_off = static_cast<size_t>(it->second.offset) + p.offset;
-            if (raw[abs_off] != p.expected) {
-                LOG_WARNING(Loader, "OoT button patcher: unexpected byte in {} at {:#x}",
-                            p.entry_name, p.offset);
-                return false;
+            for (const auto& slice : it->second) {
+                if (p.offset >= slice.size) {
+                    LOG_WARNING(Loader, "OoT button patcher: offset out of range in {}",
+                                p.entry_name);
+                    return false;
+                }
+                const size_t abs_off = static_cast<size_t>(slice.offset) + p.offset;
+                if (raw[abs_off] != p.expected) {
+                    LOG_WARNING(Loader, "OoT button patcher: unexpected byte in {} at {:#x}",
+                                p.entry_name, p.offset);
+                    return false;
+                }
+                raw[abs_off] = p.value;
             }
-            raw[abs_off] = p.value;
         }
         if (!CompressZstd(raw, 1, compressed) || !WriteFileAtomic(blarc_out, compressed)) {
             LOG_WARNING(Loader, "OoT button patcher: failed to write Common.blarc.zs");
             return false;
         }
+        const std::array<u8, 2> marker{'v', '2'};
+        WriteFileAtomic(style_output_dir / ".patch_v2", marker);
     }
 
     LOG_INFO(Loader, "OoT button icon/layout patch (style={}) generated successfully.", style_idx);
