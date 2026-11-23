@@ -76,8 +76,14 @@ public:
 
     /// Swap A<->B and X<->Y face buttons for PC/Xbox layout.
     void SwapFaceButtons();
+    [[nodiscard]] bool AreFaceButtonsSwapped() const;
+    void SetFaceButtonsSwapped(bool want_swapped);
+    void SetPcLayoutActive(bool active) {
+        pc_layout_active = active;
+    }
 
 signals:
+    void FaceButtonsChanged();
     /// Emitted when this controller is (dis)connected by the user.
     void Connected(bool connected);
     /// Emitted when the Handheld mode is selected (undocked with dual joycons attached).
@@ -228,4 +234,5 @@ private:
     QWidget* bottom_row;
 
     Core::HID::HIDCore& hid_core;
+    bool pc_layout_active{false};
 };

@@ -3,13 +3,16 @@
 
 // MainWindow's Fritchii minimalist UI setup on top of CheezyEmu 12's engine.
 
+#include <QActionGroup>
 #include <QApplication>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QStatusBar>
 
 #include "common/settings.h"
 #include "core/core.h"
+#include "qt_common/config/uisettings.h"
 #include "qt_common/qt_common.h"
 #include "qt_common/util/game.h"
 #include "ui_main.h"
@@ -21,6 +24,7 @@
 #include "yuzu/game/game_list.h"
 #include "yuzu/main_window.h"
 #include "yuzu/multiplayer/state.h"
+#include "yuzu/render/performance_overlay.h"
 #include "yuzu/util/clickable_label.h"
 
 void MainWindow::SetUpFritchiiUi() {
@@ -113,6 +117,114 @@ void MainWindow::SetUpFritchiiUi() {
         OnSaveConfig();
     });
     statusBar()->insertPermanentWidget(1, oot_fps_button);
+
+    // Benchmark / Performance Overlay menu button right next to 60 FPS / GRAPHICS.
+    auto* const overlay_button = new QPushButton(QObject::tr("OVERLAY"), this);
+    overlay_button->setObjectName(QStringLiteral("TogglableStatusBarButton"));
+    overlay_button->setCheckable(true);
+    overlay_button->setFocusPolicy(Qt::NoFocus);
+    overlay_button->setToolTip(
+        tr("Benchmark & Performance Overlay (Ctrl+V): toggle on/off, position, compact mode, "
+           "FPS graph, RAM/VRAM, CPU Single-Core / GPU W & °C, and hardware banner."));
+    const auto update_overlay_btn = [this, overlay_button]() {
+        overlay_button->setChecked(ui->action_Show_Performance_Overlay->isChecked());
+    };
+    update_overlay_btn();
+    connect(ui->action_Show_Performance_Overlay, &QAction::toggled, this,
+            [update_overlay_btn](bool) { update_overlay_btn(); });
+    connect(overlay_button, &QPushButton::clicked, this, [this, overlay_button, update_overlay_btn] {
+        update_overlay_btn();
+        auto& uis = UISettings::values;
+        QMenu menu(overlay_button);
+
+        const auto refresh_overlay = [this]() {
+            if (perf_overlay) {
+                perf_overlay->RefreshFromSettings();
+            }
+            OnSaveConfig();
+        };
+
+        QAction* const show_act =
+            menu.addAction(QObject::tr("Show Benchmark Overlay (Ctrl+V)"), [this, update_overlay_btn] {
+                const bool next = !ui->action_Show_Performance_Overlay->isChecked();
+                ui->action_Show_Performance_Overlay->setChecked(next);
+                UISettings::values.show_perf_overlay.SetValue(next);
+                if (perf_overlay) {
+                    perf_overlay->setVisible(next);
+                }
+                update_overlay_btn();
+                OnSaveConfig();
+            });
+        show_act->setCheckable(true);
+        show_act->setChecked(ui->action_Show_Performance_Overlay->isChecked());
+
+        menu.addSeparator();
+
+        QMenu* const position = menu.addMenu(QObject::tr("Position"));
+        auto* const places = new QActionGroup(position);
+        const std::pair<int, QString> anchors[]{
+            {0, QObject::tr("Top left")},      {1, QObject::tr("Top centre")},
+            {2, QObject::tr("Top right")},     {3, QObject::tr("Bottom left")},
+            {4, QObject::tr("Bottom centre")}, {5, QObject::tr("Bottom right")},
+        };
+        for (const auto& [choice, name] : anchors) {
+            QAction* const act = position->addAction(name, [choice, refresh_overlay] {
+                UISettings::values.perf_overlay_anchor.SetValue(choice);
+                refresh_overlay();
+            });
+            act->setCheckable(true);
+            act->setChecked(uis.perf_overlay_anchor.GetValue() == choice);
+            places->addAction(act);
+        }
+
+        const auto add_toggle = [&menu, refresh_overlay](const QString& name,
+                                                         Settings::Setting<bool>& setting) {
+            QAction* const act = menu.addAction(name, [&setting, refresh_overlay] {
+                setting.SetValue(!setting.GetValue());
+                refresh_overlay();
+            });
+            act->setCheckable(true);
+            act->setChecked(setting.GetValue());
+        };
+        add_toggle(QObject::tr("Compact (FPS && Frame Time only)"), uis.perf_overlay_compact);
+        add_toggle(QObject::tr("Frame Rate History Graph"), uis.perf_overlay_graph);
+        add_toggle(QObject::tr("RAM && VRAM Usage"), uis.perf_overlay_memory);
+        {
+            QAction* const details_act =
+                menu.addAction(QObject::tr("Details (CPU Single Core • GPU W/°C)"), [refresh_overlay] {
+                    PerformanceOverlay::ShowDetailsFlag() = !PerformanceOverlay::ShowDetailsFlag();
+                    refresh_overlay();
+                });
+            details_act->setCheckable(true);
+            details_act->setChecked(PerformanceOverlay::ShowDetailsFlag());
+        }
+        {
+            QAction* const hw_act =
+                menu.addAction(QObject::tr("Hardware Info Banner (CPU | GPU | RAM)"), [refresh_overlay] {
+                    PerformanceOverlay::ShowHwBannerFlag() = !PerformanceOverlay::ShowHwBannerFlag();
+                    refresh_overlay();
+                });
+            hw_act->setCheckable(true);
+            hw_act->setChecked(PerformanceOverlay::ShowHwBannerFlag());
+        }
+
+        QMenu* const opacity = menu.addMenu(QObject::tr("Background Opacity"));
+        auto* const levels = new QActionGroup(opacity);
+        for (const int percent : {100, 85, 70, 50, 30}) {
+            QAction* const act =
+                opacity->addAction(QObject::tr("%1%").arg(percent), [percent, refresh_overlay] {
+                    UISettings::values.perf_overlay_opacity.SetValue(percent);
+                    refresh_overlay();
+                });
+            act->setCheckable(true);
+            act->setChecked(uis.perf_overlay_opacity.GetValue() == percent);
+            levels->addAction(act);
+        }
+
+        const QSize sz = menu.sizeHint();
+        menu.exec(overlay_button->mapToGlobal(QPoint(0, -sz.height())));
+    });
+    statusBar()->insertPermanentWidget(2, overlay_button);
 
     // Fritchii Home screen + left slim icon rail + top-right Saves, Shader Cache & Credits buttons.
     FritchiiUi::HomeHooks home{

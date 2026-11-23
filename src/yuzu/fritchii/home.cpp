@@ -3,9 +3,12 @@
 #include "yuzu/fritchii/home.h"
 
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <set>
 #include <vector>
 
+#include <fmt/format.h>
 #include <QApplication>
 #include <QBoxLayout>
 #include <QDialog>
@@ -25,6 +28,7 @@
 #include <QTimer>
 #include <QToolButton>
 
+#include "common/fs/path_util.h"
 #include "qt_common/game_list/game_list_p.h"
 #include "yuzu/fritchii/fritchii_ui.h"
 #include "yuzu/fritchii/saves_window.h"
@@ -347,7 +351,7 @@ QWidget* Home::MakePage() {
         }
         QDialog dlg(window);
         dlg.setWindowTitle(tr("Shader Cache Manager"));
-        dlg.setMinimumWidth(480);
+        dlg.setMinimumWidth(510);
         auto* vbox = new QVBoxLayout(&dlg);
         vbox->setContentsMargins(20, 18, 20, 18);
         vbox->setSpacing(12);
@@ -359,6 +363,54 @@ QWidget* Home::MakePage() {
             &dlg);
         hdr->setWordWrap(true);
         vbox->addWidget(hdr);
+
+        const u64 tid = hero_id ? hero_id : OcarinaOfTime;
+        const auto shader_dir = Common::FS::GetEdenPath(Common::FS::EdenPath::ShaderDir) /
+                                fmt::format("{:016x}", tid);
+        u64 recipe_done_entries = 0;
+        u64 compute_done_entries = 0;
+        {
+            std::ifstream rec_in(shader_dir / "precompiled.fork-v54.done");
+            u64 sz = 0;
+            s64 wt = 0;
+            rec_in >> sz >> wt >> recipe_done_entries;
+        }
+        {
+            std::ifstream cmp_in(shader_dir / "warm-compute.done");
+            u64 sz = 0;
+            s64 wt = 0;
+            cmp_in >> sz >> wt >> compute_done_entries;
+        }
+        const bool fast_ready = (recipe_done_entries > 0);
+        const bool full_ready = (recipe_done_entries > 50000);
+        std::error_code cache_ec;
+        const bool has_any_cache =
+            fast_ready || (compute_done_entries > 0) ||
+            std::filesystem::exists(shader_dir / "vulkan.fork-v54.bin", cache_ec) ||
+            std::filesystem::exists(shader_dir / "precache-graphics.bin", cache_ec);
+
+        auto* status_box = new QLabel(&dlg);
+        status_box->setWordWrap(true);
+        if (full_ready) {
+            status_box->setStyleSheet(QStringLiteral(
+                "QLabel { background-color: #102419; color: #6ee7b7; border: 1px solid #059669; "
+                "border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 700; }"));
+            status_box->setText(
+                tr("✔  Status: Full Cache 100% Built (121,364 / 121,364 shaders ready)"));
+        } else if (fast_ready) {
+            status_box->setStyleSheet(QStringLiteral(
+                "QLabel { background-color: #102419; color: #6ee7b7; border: 1px solid #059669; "
+                "border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 700; }"));
+            status_box->setText(
+                tr("✔  Status: Fast Essential Built (13,136 / 121,364 shaders ready to play!)"));
+        } else {
+            status_box->setStyleSheet(QStringLiteral(
+                "QLabel { background-color: #181822; color: #d4d4dc; border: 1px solid #2e2e3a; "
+                "border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 600; }"));
+            status_box->setText(
+                tr("⚪  Status: Not pre-built yet (Fast Essential will run on first Play)"));
+        }
+        vbox->addWidget(status_box);
 
         const auto make_action_btn = [&](const QString& label, const QString& desc,
                                          const char* border_color, const char* bg_color) {
@@ -377,17 +429,22 @@ QWidget* Home::MakePage() {
         };
 
         auto* fast_btn = make_action_btn(
-            tr("▶  Fast Essential (11,471 shaders — ~9.5%)"),
-            tr("Real-gameplay Pareto shaders (6,677 graphics + 4,794 compute). Best balance & "
+            fast_ready
+                ? tr("✔  Fast Essential (13,136 shaders — ~10.8%)  [BUILT / READY]")
+                : tr("▶  Fast Essential (13,136 shaders — ~10.8%)"),
+            tr("Real-gameplay Pareto shaders (8,342 graphics + 4,794 compute). Best balance && "
                "mandatory for Play."),
-            "#7c3aed", "#181526");
+            fast_ready ? "#059669" : "#7c3aed", fast_ready ? "#11221a" : "#181526");
         auto* full_btn = make_action_btn(
-            tr("▶  Full Cache (121,364 shaders — 100%)"),
+            full_ready
+                ? tr("✔  Full Cache (121,364 shaders — 100%)  [BUILT / READY]")
+                : tr("▶  Full Cache (121,364 shaders — 100%)"),
             tr("Builds every possible shader in the game recipe while idle and returns to Home "
                "when done."),
-            "#2e2e3a", "#14141b");
+            full_ready ? "#059669" : "#2e2e3a", full_ready ? "#11221a" : "#14141b");
         auto* clear_btn = make_action_btn(
-            tr("🗑  Clear Shader Cache"),
+            has_any_cache ? tr("🗑  Clear Shader Cache")
+                          : tr("🗑  Clear Shader Cache  (Already Empty)"),
             tr("Deletes compiled shaders (use after changing your graphics card/driver or to fix "
                "visual glitches)."),
             "#4a2228", "#1a1215");
