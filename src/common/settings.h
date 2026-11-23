@@ -181,7 +181,7 @@ struct Values {
 #ifdef __ANDROID__
                                            AudioEngine::Sdl3,
 #else
-                                           AudioEngine::Auto,
+                                           AudioEngine::Cubeb,
 #endif
                                            "output_engine", Category::Audio, Specialization::RuntimeList};
     SwitchableSetting<std::string> audio_output_device_id{
@@ -390,7 +390,7 @@ struct Values {
                                            true};
 
     SwitchableSetting<ScalingFilter> scaling_filter{linkage,
-                                                    ScalingFilter::ScaleForce,
+                                                    ScalingFilter::Fsr,
                                                     "scaling_filter",
                                                     Category::Renderer,
                                                     Specialization::Default,
@@ -404,7 +404,7 @@ struct Values {
 #ifdef __ANDROID__
                                                        0,
 #else
-                                                       25,
+                                                       30,
 #endif
                                                        0,
                                                        200,
@@ -439,7 +439,7 @@ struct Values {
                                                       true};
 
     SwitchableSetting<AntiAliasing> anti_aliasing{linkage,
-                                                  AntiAliasing::Fxaa,
+                                                  AntiAliasing::Smaa,
                                                   "anti_aliasing",
                                                   Category::Renderer,
                                                   Specialization::Default,
@@ -488,7 +488,7 @@ struct Values {
                                                       true};
 
     SwitchableSetting<bool> post_shader_enabled{linkage,
-                                                true,
+                                                false,
                                                 "post_shader_enabled",
                                                 Category::Renderer,
                                                 Specialization::Default,

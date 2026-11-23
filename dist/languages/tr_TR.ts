@@ -6769,6 +6769,18 @@ Debug Message: </source>
         <source>Estimated Time %1</source>
         <translation>Tahmini Süre %1</translation>
     </message>
+    <message>
+        <source>Gathering this game's shaders (once, about a minute)...</source>
+        <translation>Bu oyunun gölgelendiricileri toplanıyor (tek seferlik, yaklaşık bir dakika)...</translation>
+    </message>
+    <message>
+        <source>Building shaders %1 / %2 (just this once)</source>
+        <translation>Gölgelendiriciler derleniyor %1 / %2 (yalnızca bu sefer)</translation>
+    </message>
+    <message>
+        <source>Tip: Shaders, saves &amp; settings are saved in the 'user' folder — keep or copy 'user' when updating FritCheeLii so you never have to rebuild.</source>
+        <translation>İpucu: Gölgelendiriciler, kayıtlar ve ayarlar 'user' klasöründe saklanır — FritCheeLii'yi güncellerken yeniden derlememek için 'user' klasörünü koruyun veya kopyalayın.</translation>
+    </message>
 </context>
 <context>
     <name>Lobby</name>

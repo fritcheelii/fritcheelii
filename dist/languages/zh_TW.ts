@@ -6767,6 +6767,18 @@ Debug Message: </source>
         <source>Estimated Time %1</source>
         <translation>預估時間：%1</translation>
     </message>
+    <message>
+        <source>Gathering this game's shaders (once, about a minute)...</source>
+        <translation>正在收集此遊戲的著色器（僅此一次，約需一分鐘）...</translation>
+    </message>
+    <message>
+        <source>Building shaders %1 / %2 (just this once)</source>
+        <translation>正在編譯著色器 %1 / %2（僅此一次）</translation>
+    </message>
+    <message>
+        <source>Tip: Shaders, saves &amp; settings are saved in the 'user' folder — keep or copy 'user' when updating FritCheeLii so you never have to rebuild.</source>
+        <translation>提示：著色器、存檔與設定皆儲存在 'user' 資料夾中 — 更新 FritCheeLii 時請保留或複製 'user' 資料夾，即可免去重新編譯。</translation>
+    </message>
 </context>
 <context>
     <name>Lobby</name>

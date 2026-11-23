@@ -6737,6 +6737,18 @@ Debug Message: </source>
         <source>Estimated Time %1</source>
         <translation>Geschatte Tijd %1</translation>
     </message>
+    <message>
+        <source>Gathering this game's shaders (once, about a minute)...</source>
+        <translation>Shaders van dit spel verzamelen (eenmalig, ongeveer een minuut)...</translation>
+    </message>
+    <message>
+        <source>Building shaders %1 / %2 (just this once)</source>
+        <translation>Shaders bouwen %1 / %2 (alleen deze keer)</translation>
+    </message>
+    <message>
+        <source>Tip: Shaders, saves &amp; settings are saved in the 'user' folder — keep or copy 'user' when updating FritCheeLii so you never have to rebuild.</source>
+        <translation>Tip: Shaders, opgeslagen spellen &amp; instellingen worden opgeslagen in de map 'user' — bewaar of kopieer 'user' bij het updaten van FritCheeLii zodat je nooit opnieuw hoeft te bouwen.</translation>
+    </message>
 </context>
 <context>
     <name>Lobby</name>

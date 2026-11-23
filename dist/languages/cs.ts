@@ -6728,6 +6728,18 @@ Debug Message: </source>
         <source>Estimated Time %1</source>
         <translation>Odhadovaný čas %1</translation>
     </message>
+    <message>
+        <source>Gathering this game's shaders (once, about a minute)...</source>
+        <translation>Shromažďování shaderů této hry (pouze jednou, asi minutu)...</translation>
+    </message>
+    <message>
+        <source>Building shaders %1 / %2 (just this once)</source>
+        <translation>Sestavování shaderů %1 / %2 (pouze tentokrát)</translation>
+    </message>
+    <message>
+        <source>Tip: Shaders, saves &amp; settings are saved in the 'user' folder — keep or copy 'user' when updating FritCheeLii so you never have to rebuild.</source>
+        <translation>Tip: Shadery, uložené pozice a nastavení jsou uloženy ve složce 'user' — při aktualizaci FritCheeLii složku 'user' ponechte nebo zkopírujte, abyste nemuseli znovu sestavovat.</translation>
+    </message>
 </context>
 <context>
     <name>Lobby</name>

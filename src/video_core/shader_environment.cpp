@@ -470,8 +470,10 @@ std::optional<u64> GenericEnvironment::TryFindSize() {
 Tegra::Texture::TICEntry GenericEnvironment::ReadTextureInfo(GPUVAddr tic_addr, u32 tic_limit,
                                                              bool via_header_index, u32 raw) {
     const auto handle{Tegra::Texture::TexturePair(raw, via_header_index)};
-    const u32 index{Tegra::Texture::TextureHeaderIndex(handle.first, tic_limit,
-                                                       gpu_memory->UsesNativeTiling())};
+    const u32 index{Tegra::Texture::TextureHeaderIndex(
+        handle.first, tic_limit,
+        Tegra::Texture::UsesHeaderByteOffsetHandles(gpu_memory->UsesNativeTiling(),
+                                                   Settings::GetCurrentProgramID()))};
     Tegra::Texture::TICEntry entry;
     if (index > tic_limit) {
         // Past the pool, the bytes are not a descriptor: reading them gave the shader a random
@@ -1197,8 +1199,10 @@ Shader::TexturePixelFormat ComputeEnvironment::ReadTexturePixelFormat(u32 handle
     if (inserted && result == Shader::TexturePixelFormat::R16_FLOAT &&
         kepler_compute->IsNativeMode() && std::getenv("EDEN_NATIVE_DRAW_DIAGNOSTICS")) {
         const auto pair{Tegra::Texture::TexturePair(handle, qmd.linked_tsc != 0)};
-        const u32 index{Tegra::Texture::TextureHeaderIndex(pair.first, regs.tic.limit,
-                                                        gpu_memory->UsesNativeTiling())};
+        const u32 index{Tegra::Texture::TextureHeaderIndex(
+            pair.first, regs.tic.limit,
+            Tegra::Texture::UsesHeaderByteOffsetHandles(gpu_memory->UsesNativeTiling(),
+                                                       Settings::GetCurrentProgramID()))};
         const GPUVAddr tic_gpu{regs.tic.Address() + index * sizeof(entry)};
         const auto tic_device{gpu_memory->GpuToCpuAddress(tic_gpu)};
         const auto image_device{gpu_memory->GpuToCpuAddress(entry.Address())};

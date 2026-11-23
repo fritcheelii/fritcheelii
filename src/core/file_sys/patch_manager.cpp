@@ -25,6 +25,7 @@
 #include "core/file_sys/content_archive.h"
 #include "core/file_sys/control_metadata.h"
 #include "core/file_sys/ips_layer.h"
+#include "core/file_sys/oot_button_patcher.h"
 #include "core/file_sys/patch_manager.h"
 #include "core/file_sys/registered_cache.h"
 #include "core/file_sys/romfs.h"
@@ -1087,13 +1088,31 @@ void PatchManager::ApplyLayeredFS(VirtualFile& romfs, ContentRecordType type) co
         }
     }
 
-    // FritCheeLii: Built-in OoT Button Icons selector (Switch / Xbox / PlayStation / PC / Steam Deck / PC Layouts)
-    if (title_id == 0x0400486024DEC000 && load_dir != nullptr) {
+    VirtualDir extracted_romfs;
+
+    // FritCheeLii: Built-in OoT Button Icons selector + automatic zero-asset runtime patcher
+    if (title_id == 0x0400486024DEC000 && type == ContentRecordType::Program && load_dir != nullptr) {
         constexpr std::array<const char*, 8> ICON_STYLES{
             "",          "xbox",       "playstation",       "pc",
             "steamdeck", "xbox_label", "playstation_label", "steamdeck_label"};
         const int style_idx = Settings::values.oot_button_icons.GetValue();
         if (style_idx >= 1 && style_idx < static_cast<int>(ICON_STYLES.size())) {
+            const std::filesystem::path style_path =
+                std::filesystem::path(load_dir->GetFullPath()) / "button_icons" /
+                ICON_STYLES[style_idx];
+            const bool has_bntx = std::filesystem::exists(
+                style_path / "UI" / "Layout2Archive" /
+                "Common.Product.100.Nin_Ounce_NVN2.bntx.zs");
+            const bool has_blarc =
+                (style_idx < 5) ||
+                std::filesystem::exists(style_path / "UI" / "Layout2Archive" /
+                                        "Common.Product.100.Nin_Ounce_NVN2.blarc.zs");
+            if (!has_bntx || !has_blarc) {
+                extracted_romfs = ExtractRomFS(romfs);
+                if (extracted_romfs != nullptr) {
+                    EnsureOoTButtonIconsGenerated(extracted_romfs, style_path, style_idx);
+                }
+            }
             if (auto icons_root = FindSubdirectoryCaseless(load_dir, "button_icons");
                 icons_root != nullptr) {
                 if (auto style_dir = FindSubdirectoryCaseless(icons_root, ICON_STYLES[style_idx]);
@@ -1115,7 +1134,7 @@ void PatchManager::ApplyLayeredFS(VirtualFile& romfs, ContentRecordType type) co
         return;
     }
 
-    auto extracted = ExtractRomFS(romfs);
+    auto extracted = extracted_romfs ? std::move(extracted_romfs) : ExtractRomFS(romfs);
     if (extracted == nullptr) {
         return;
     }

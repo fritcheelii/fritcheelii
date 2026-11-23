@@ -6809,6 +6809,18 @@ Mensagem de Depuração: </translation>
         <source>Estimated Time %1</source>
         <translation>Tempo Estimado %1</translation>
     </message>
+    <message>
+        <source>Gathering this game's shaders (once, about a minute)...</source>
+        <translation>Coletando os shaders deste jogo (apenas uma vez, cerca de um minuto)...</translation>
+    </message>
+    <message>
+        <source>Building shaders %1 / %2 (just this once)</source>
+        <translation>Compilando shaders %1 / %2 (apenas desta vez)</translation>
+    </message>
+    <message>
+        <source>Tip: Shaders, saves &amp; settings are saved in the 'user' folder — keep or copy 'user' when updating FritCheeLii so you never have to rebuild.</source>
+        <translation>Dica: Os shaders, saves e configurações ficam salvos na pasta 'user' — mantenha ou copie a pasta 'user' ao atualizar o FritCheeLii para não precisar compilar de novo.</translation>
+    </message>
 </context>
 <context>
     <name>Lobby</name>

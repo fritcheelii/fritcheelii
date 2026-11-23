@@ -6831,6 +6831,18 @@ Felsökningsmeddelande: </translation>
         <source>Estimated Time %1</source>
         <translation>Beräknad tid %1</translation>
     </message>
+    <message>
+        <source>Gathering this game's shaders (once, about a minute)...</source>
+        <translation>Samlar in spelets shaders (en gång, ungefär en minut)...</translation>
+    </message>
+    <message>
+        <source>Building shaders %1 / %2 (just this once)</source>
+        <translation>Bygger shaders %1 / %2 (endast denna gång)</translation>
+    </message>
+    <message>
+        <source>Tip: Shaders, saves &amp; settings are saved in the 'user' folder — keep or copy 'user' when updating FritCheeLii so you never have to rebuild.</source>
+        <translation>Tips: Shaders, sparfiler och inställningar sparas i mappen 'user' — behåll eller kopiera 'user' när du uppdaterar FritCheeLii så slipper du bygga om.</translation>
+    </message>
 </context>
 <context>
     <name>Lobby</name>

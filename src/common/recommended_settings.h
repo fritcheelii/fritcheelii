@@ -106,7 +106,12 @@ void ForEachRecommendedSetting(Values& config, const HostProfile& host, Func&& f
     entry(config.resolution_setup, ResolutionSetup::Res1X);
     entry(config.vsync_mode, VSyncMode::Mailbox);
     entry(config.async_presentation, true);
+    entry(config.scaling_filter, ScalingFilter::Fsr);
+    entry(config.anti_aliasing, AntiAliasing::Smaa);
+    entry(config.fsr_sharpening_slider, 30);
+    entry(config.post_shader_enabled, false);
     entry(config.oot_anti_aliasing, OotAntiAliasing::NoSharpening);
+    entry(config.sink_id, AudioEngine::Cubeb);
 
     // What depends on the PC: AMD FSR, frame generation and Ocarina of Time's render size.
     // AMD FSR 4 only runs on supported AMD GPUs (keep OFF on NVIDIA and <7 GB cards).

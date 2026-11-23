@@ -6810,6 +6810,18 @@ Debug Message: </source>
         <source>Estimated Time %1</source>
         <translation>%1 الوقت المقدر</translation>
     </message>
+    <message>
+        <source>Gathering this game's shaders (once, about a minute)...</source>
+        <translation>جارٍ تجميع مظللات هذه اللعبة (مرة واحدة، حوالي دقيقة)...</translation>
+    </message>
+    <message>
+        <source>Building shaders %1 / %2 (just this once)</source>
+        <translation>جارٍ بناء المظللات %1 / %2 (هذه المرة فقط)</translation>
+    </message>
+    <message>
+        <source>Tip: Shaders, saves &amp; settings are saved in the 'user' folder — keep or copy 'user' when updating FritCheeLii so you never have to rebuild.</source>
+        <translation>نصيحة: يتم حفظ المظللات والتخزينات والإعدادات في مجلد 'user' — احتفظ بمجلد 'user' أو انسخه عند تحديث FritCheeLii حتى لا تضطر لإعادة البناء.</translation>
+    </message>
 </context>
 <context>
     <name>Lobby</name>

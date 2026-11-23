@@ -161,11 +161,11 @@ struct Values {
 
     // Menu sounds (yuzu/util/menu_sounds.cpp): the click and start chime, the home screen hum
     // and their volume.
-    Setting<bool> menu_sounds{linkage, true, "menu_sounds", Category::Ui};
-    Setting<bool> menu_ambient{linkage, true, "menu_ambient", Category::Ui};
+    Setting<bool> menu_sounds{linkage, false, "menu_sounds", Category::Ui};
+    Setting<bool> menu_ambient{linkage, false, "menu_ambient", Category::Ui};
     /// The picked game's own title music (from the player's copy) on the home screen and
     /// while it loads.
-    Setting<bool> menu_game_music{linkage, true, "menu_game_music", Category::Ui};
+    Setting<bool> menu_game_music{linkage, false, "menu_game_music", Category::Ui};
     /// That music: random songs from the game's soundtrack (true), or its title theme.
     Setting<bool> menu_music_random{linkage, true, "menu_music_random", Category::Ui};
     Setting<u32, true> menu_sound_volume{linkage, 60, 0, 100, "menu_sound_volume", Category::Ui};
