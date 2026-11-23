@@ -129,8 +129,10 @@ void ConfigureInput::Initialize(InputCommon::InputSubsystem* input_subsystem,
                                               tr("PlayStation (PC Layout — ✕ Confirm)"),
                                               tr("Steam Deck (PC Layout — A Confirm)")});
             combo_oot_button_icons->setToolTip(
-                tr("Selects on-screen controller button prompts from "
-                   "user/load/0400486024DEC000/button_icons/<style>. Requires game restart."));
+                tr("Selects on-screen controller button prompts for Zelda OoT.\n"
+                   "Automatically generated from your own game RomFS on first launch "
+                   "(or loaded from user/load/0400486024DEC000/button_icons/<style>).\n"
+                   "Requires game restart."));
             const int cur_icons = Settings::values.oot_button_icons.GetValue();
             combo_oot_button_icons->setCurrentIndex(
                 cur_icons >= 0 && cur_icons < combo_oot_button_icons->count() ? cur_icons : 0);

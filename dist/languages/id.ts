@@ -6755,6 +6755,18 @@ Debug Message: </source>
         <source>Estimated Time %1</source>
         <translation type="unfinished"/>
     </message>
+    <message>
+        <source>Gathering this game's shaders (once, about a minute)...</source>
+        <translation>Mengumpulkan shader game ini (sekali saja, sekitar satu menit)...</translation>
+    </message>
+    <message>
+        <source>Building shaders %1 / %2 (just this once)</source>
+        <translation>Membangun shader %1 / %2 (hanya kali ini saja)</translation>
+    </message>
+    <message>
+        <source>Tip: Shaders, saves &amp; settings are saved in the 'user' folder — keep or copy 'user' when updating FritCheeLii so you never have to rebuild.</source>
+        <translation>Tips: Shader, save &amp; pengaturan disimpan di folder 'user' — simpan atau salin folder 'user' saat memperbarui FritCheeLii agar tidak perlu membangun ulang.</translation>
+    </message>
 </context>
 <context>
     <name>Lobby</name>

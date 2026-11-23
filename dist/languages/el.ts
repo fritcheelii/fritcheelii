@@ -6727,6 +6727,18 @@ Debug Message: </source>
         <source>Estimated Time %1</source>
         <translation type="unfinished"/>
     </message>
+    <message>
+        <source>Gathering this game's shaders (once, about a minute)...</source>
+        <translation>Συλλογή των shaders αυτού του παιχνιδιού (μία φορά, περίπου ένα λεπτό)...</translation>
+    </message>
+    <message>
+        <source>Building shaders %1 / %2 (just this once)</source>
+        <translation>Δημιουργία shaders %1 / %2 (μόνο αυτή τη φορά)</translation>
+    </message>
+    <message>
+        <source>Tip: Shaders, saves &amp; settings are saved in the 'user' folder — keep or copy 'user' when updating FritCheeLii so you never have to rebuild.</source>
+        <translation>Συμβουλή: Τα shaders, οι αποθηκεύσεις και οι ρυθμίσεις αποθηκεύονται στον φάκελο 'user' — κρατήστε ή αντιγράψτε τον φάκελο 'user' όταν ενημερώνετε το FritCheeLii για να μην χρειαστεί ξανά δημιουργία.</translation>
+    </message>
 </context>
 <context>
     <name>Lobby</name>

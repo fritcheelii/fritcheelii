@@ -6705,6 +6705,18 @@ Debug Message: </source>
         <source>Estimated Time %1</source>
         <translation>Arvioitu aika %1</translation>
     </message>
+    <message>
+        <source>Gathering this game's shaders (once, about a minute)...</source>
+        <translation>Kerätään tämän pelin varjostimia (kerran, noin minuutti)...</translation>
+    </message>
+    <message>
+        <source>Building shaders %1 / %2 (just this once)</source>
+        <translation>Rakennetaan varjostimia %1 / %2 (vain tämän kerran)</translation>
+    </message>
+    <message>
+        <source>Tip: Shaders, saves &amp; settings are saved in the 'user' folder — keep or copy 'user' when updating FritCheeLii so you never have to rebuild.</source>
+        <translation>Vinkki: Varjostimet, tallennukset ja asetukset tallennetaan 'user'-kansioon — säilytä tai kopioi 'user' päivittäessäsi FritCheeLii-emulaattoria, jotta sinun ei tarvitse rakentaa niitä uudelleen.</translation>
+    </message>
 </context>
 <context>
     <name>Lobby</name>

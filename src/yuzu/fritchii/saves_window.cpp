@@ -261,14 +261,13 @@ void SyncDirCopy(const fs::path& src, const fs::path& dst) {
 void EnsureSlot1Seeded(const fs::path& fritchii, const fs::path& slots_root) {
     const fs::path slot1_dir = slots_root / "slot_1";
     const fs::path nand_oot = OotActiveNandDir(fritchii);
-    if (!DirHasFiles(slot1_dir / "data") && DirHasFiles(nand_oot)) {
+    if (!fs::exists(slots_root / "active_slot.txt") && !DirHasFiles(slot1_dir / "data") &&
+        DirHasFiles(nand_oot)) {
         SyncDirCopy(nand_oot, slot1_dir / "data");
         const QString stamp =
             QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm"));
         WriteSlotMeta(slot1_dir, QObject::tr("Main Campaign"), stamp);
-        if (!fs::exists(slots_root / "active_slot.txt")) {
-            WriteActiveSlot(slots_root, 1);
-        }
+        WriteActiveSlot(slots_root, 1);
     }
 }
 
@@ -780,19 +779,7 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
     };
 
     const fs::path slots_root = OotSlotsRoot(fritchii);
-    {
-        const fs::path slot1_dir = slots_root / "slot_1";
-        const fs::path nand_oot = OotActiveNandDir(fritchii);
-        if (!DirHasFiles(slot1_dir / "data") && DirHasFiles(nand_oot)) {
-            SyncDirCopy(nand_oot, slot1_dir / "data");
-            const QString stamp =
-                QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm"));
-            WriteSlotMeta(slot1_dir, QObject::tr("Main Campaign"), stamp);
-            if (!fs::exists(slots_root / "active_slot.txt")) {
-                WriteActiveSlot(slots_root, 1);
-            }
-        }
-    }
+    EnsureSlot1Seeded(fritchii, slots_root);
 
     int row = 0;
 

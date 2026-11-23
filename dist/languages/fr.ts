@@ -6794,6 +6794,18 @@ Message de débogage :</translation>
         <source>Estimated Time %1</source>
         <translation>Temps Estimé %1</translation>
     </message>
+    <message>
+        <source>Gathering this game's shaders (once, about a minute)...</source>
+        <translation>Collecte des shaders de ce jeu (une seule fois, environ une minute)...</translation>
+    </message>
+    <message>
+        <source>Building shaders %1 / %2 (just this once)</source>
+        <translation>Compilation des shaders %1 / %2 (cette fois uniquement)</translation>
+    </message>
+    <message>
+        <source>Tip: Shaders, saves &amp; settings are saved in the 'user' folder — keep or copy 'user' when updating FritCheeLii so you never have to rebuild.</source>
+        <translation>Astuce : Les shaders, sauvegardes et paramètres sont enregistrés dans le dossier 'user' — conservez ou copiez 'user' lors de la mise à jour de FritCheeLii pour ne jamais avoir à tout recompiler.</translation>
+    </message>
 </context>
 <context>
     <name>Lobby</name>

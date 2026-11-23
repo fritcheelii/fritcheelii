@@ -6721,6 +6721,18 @@ Debug Message: </source>
         <source>Estimated Time %1</source>
         <translation>Hátralévő idő %1</translation>
     </message>
+    <message>
+        <source>Gathering this game's shaders (once, about a minute)...</source>
+        <translation>A játék árnyalóinak összegyűjtése (egyszer, körülbelül egy perc)...</translation>
+    </message>
+    <message>
+        <source>Building shaders %1 / %2 (just this once)</source>
+        <translation>Árnyalók fordítása %1 / %2 (csak ez egyszer)</translation>
+    </message>
+    <message>
+        <source>Tip: Shaders, saves &amp; settings are saved in the 'user' folder — keep or copy 'user' when updating FritCheeLii so you never have to rebuild.</source>
+        <translation>Tipp: Az árnyalók, mentések és beállítások a 'user' mappában vannak tárolva — FritCheeLii frissítésekor tartsd meg vagy másold át a 'user' mappát, hogy ne kelljen újrafordítani.</translation>
+    </message>
 </context>
 <context>
     <name>Lobby</name>

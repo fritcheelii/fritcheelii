@@ -368,6 +368,13 @@ void LoadingScreen::OnLoadProgress(VideoCore::LoadCallbackStage stage, std::size
     } else {
         ui->stage->setText(stage_translations[stage]);
     }
+    if (stage == VideoCore::LoadCallbackStage::Warm ||
+        stage == VideoCore::LoadCallbackStage::Build) {
+        const QString tip =
+            tr("Tip: Shaders, saves & settings are saved in the 'user' folder — keep or copy "
+               "'user' when updating FritCheeLii so you never have to rebuild.");
+        estimate = estimate.isEmpty() ? tip : estimate + QStringLiteral("\n\n") + tip;
+    }
     ui->value->setText(estimate);
     ui->progress_bar->setValue(static_cast<int>(value));
     auto* const bar = static_cast<CheeseProgress*>(cheese_progress);

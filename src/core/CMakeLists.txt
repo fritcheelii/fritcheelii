@@ -134,6 +134,9 @@ add_library(core STATIC
     file_sys/partition_filesystem.h
     file_sys/nx2_shader_extract.cpp
     file_sys/nx2_shader_extract.h
+    file_sys/oot_button_patch_data.h
+    file_sys/oot_button_patcher.cpp
+    file_sys/oot_button_patcher.h
     file_sys/patch_manager.cpp
     file_sys/patch_manager.h
     file_sys/program_metadata.cpp

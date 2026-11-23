@@ -135,16 +135,23 @@ void Config::SetUpIni() {
 
 #ifndef __ANDROID__
     if (new_global_config) {
-        BeginGroup(Settings::TranslateCategory(Settings::Category::Renderer));
         const auto seed = [this](const Settings::BasicSetting& setting, const std::string& value) {
             WriteStringSetting(setting.GetLabel(), value);
             WriteBooleanSetting(setting.GetLabel() + "\\default", false);
         };
-        seed(Settings::values.scaling_filter, ToString(u32(Settings::ScalingFilter::Fsr3)));
+        BeginGroup(Settings::TranslateCategory(Settings::Category::Renderer));
+        seed(Settings::values.scaling_filter, ToString(u32(Settings::ScalingFilter::Fsr)));
+        seed(Settings::values.anti_aliasing, ToString(u32(Settings::AntiAliasing::Smaa)));
+        seed(Settings::values.fsr_sharpening_slider, ToString(30));
+        seed(Settings::values.post_shader_enabled, ToString(false));
         seed(Settings::values.gpu_accuracy, ToString(u32(Settings::GpuAccuracy::Low)));
         seed(Settings::values.nvdec_emulation, ToString(u32(Settings::NvdecEmulation::Gpu)));
         seed(Settings::values.async_presentation, ToString(true));
         seed(Settings::values.use_asynchronous_shaders, ToString(true));
+        EndGroup();
+
+        BeginGroup(Settings::TranslateCategory(Settings::Category::Audio));
+        seed(Settings::values.sink_id, ToString(u32(Settings::AudioEngine::Cubeb)));
         EndGroup();
     }
 #endif

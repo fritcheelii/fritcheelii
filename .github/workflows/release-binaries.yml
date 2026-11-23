@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           retry() { local n; for n in 1 2 3 4; do "$@" && return 0; echo "::warning::attempt $n of '$*' failed; retrying" >&2; sleep $((n * 30)); done; return 1; }
-          tag="v5.3"
+          tag="v5.4"
           if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/$tag" >/dev/null 2>&1; then
             retry gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/$tag" \
               -f "sha=$GITHUB_SHA" -F "force=true"
@@ -63,6 +63,8 @@ jobs:
     env:
       SCCACHE_DIR: ${{ github.workspace }}/.sccache
       SCCACHE_CACHE_SIZE: 3G
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 3G
     strategy:
       fail-fast: false
       matrix:
@@ -71,6 +73,10 @@ jobs:
             runner: windows-2022
             pgo: true
             profile: cheezyemu-windows.profdata
+          - platform: linux-x86_64
+            runner: ubuntu-24.04
+            pgo: false
+            profile: ""
 
     steps:
       - name: Check out source
@@ -83,14 +89,18 @@ jobs:
           set -euo pipefail
           test -s "${{ matrix.profile }}"
 
+      # ── Windows setup ──────────────────────────────────────────────────────
       - name: Set up MSVC
+        if: startsWith(matrix.platform, 'windows')
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Install LLVM on Windows
+        if: startsWith(matrix.platform, 'windows')
         shell: pwsh
         run: ./tools/windows/install-llvm.ps1
 
       - name: Install Qt on Windows
+        if: startsWith(matrix.platform, 'windows')
         uses: jurplel/install-qt-action@v4
         with:
           version: "6.8.3"
@@ -101,6 +111,7 @@ jobs:
           cache: true
 
       - name: Install sccache on Windows
+        if: startsWith(matrix.platform, 'windows')
         shell: pwsh
         run: |
           $zip = Join-Path $env:RUNNER_TEMP 'sccache.zip'
@@ -125,13 +136,45 @@ jobs:
           $bin | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
 
       - name: Install Vulkan SDK on Windows
+        if: startsWith(matrix.platform, 'windows')
         shell: pwsh
         run: ./tools/windows/install-vulkan-sdk.ps1
 
       - name: Verify Vulkan tools on Windows
+        if: startsWith(matrix.platform, 'windows')
         shell: pwsh
         run: glslangValidator --version
 
+      # ── Linux setup ────────────────────────────────────────────────────────
+      - name: Install Linux dependencies
+        if: startsWith(matrix.platform, 'linux')
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            autoconf cmake g++ gcc git glslang-tools libglu1-mesa-dev \
+            libpulse-dev libtool libudev-dev libxkbcommon-x11-0 \
+            mesa-common-dev nasm ninja-build qt6-base-private-dev \
+            qt6-charts-dev qt6-tools-dev libavfilter-dev libavcodec-dev \
+            libswscale-dev pkg-config zlib1g-dev libva-dev libvdpau-dev \
+            spirv-tools spirv-headers libusb-1.0-0-dev \
+            libboost-dev libboost-fiber-dev libboost-context-dev \
+            libopus-dev libasound2-dev ccache python3-zstandard \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1
+
+      - name: Install Qt on Linux x86_64
+        if: startsWith(matrix.platform, 'linux')
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.3"
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtcharts qtimageformats
+          cache: true
+
+      # ── Caches ─────────────────────────────────────────────────────────────
       - name: Restore CPM downloads
         id: cpm-cache
         uses: actions/cache/restore@v5
@@ -142,8 +185,9 @@ jobs:
             cpm-${{ matrix.platform }}-v2-
             cpm-${{ runner.os }}-
 
-      - name: Restore compiler objects
-        id: compiler-cache
+      - name: Restore compiler objects (Windows)
+        if: startsWith(matrix.platform, 'windows')
+        id: compiler-cache-win
         uses: actions/cache/restore@v5
         with:
           path: .sccache
@@ -152,7 +196,20 @@ jobs:
             objects-${{ matrix.platform }}-${{ hashFiles(matrix.profile) }}-v2-${{ github.sha }}-
             objects-${{ matrix.platform }}-${{ hashFiles(matrix.profile) }}-v2-
 
+      - name: Restore compiler objects (Linux)
+        if: startsWith(matrix.platform, 'linux')
+        id: compiler-cache-linux
+        uses: actions/cache/restore@v5
+        with:
+          path: .ccache
+          key: objects-${{ matrix.platform }}-v2-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            objects-${{ matrix.platform }}-v2-${{ github.sha }}-
+            objects-${{ matrix.platform }}-v2-
+
+      # ── Configure ──────────────────────────────────────────────────────────
       - name: Configure Windows PGO
+        if: startsWith(matrix.platform, 'windows')
         shell: bash
         run: |
           set -euo pipefail
@@ -173,6 +230,7 @@ jobs:
             -DYUZU_ROOM=OFF \
             -DYUZU_ROOM_STANDALONE=OFF \
             -DYUZU_USE_BUNDLED_QT=OFF \
+            -DENABLE_QT_TRANSLATION=ON \
             -DYUZU_USE_BUNDLED_SDL3=ON \
             -DYUZU_USE_BUNDLED_SIRIT=OFF \
             -DENABLE_WERROR=OFF \
@@ -188,6 +246,31 @@ jobs:
             "-DCMAKE_C_FLAGS=$flags" \
             "-DCMAKE_CXX_FLAGS=-EHsc $flags"
 
+      - name: Configure Linux
+        if: startsWith(matrix.platform, 'linux')
+        shell: bash
+        run: |
+          set -euo pipefail
+          retry() { local n; for n in 1 2 3 4; do "$@" && return 0; echo "::warning::attempt $n of '$*' failed; retrying" >&2; sleep $((n * 30)); done; return 1; }
+          retry cmake -S . -B build/release -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=OFF \
+            -DYUZU_TESTS=OFF \
+            -DYUZU_CMD=ON \
+            -DYUZU_ROOM=OFF \
+            -DYUZU_ROOM_STANDALONE=OFF \
+            -DYUZU_USE_BUNDLED_QT=OFF \
+            -DENABLE_QT_TRANSLATION=ON \
+            "-DCMAKE_PREFIX_PATH=$QT_ROOT_DIR" \
+            -DYUZU_USE_BUNDLED_SDL3=ON \
+            -DVulkanHeaders_FORCE_BUNDLED=ON \
+            -DVulkanUtilityLibraries_FORCE_BUNDLED=ON \
+            -DENABLE_WERROR=OFF \
+            -DENABLE_UPDATE_CHECKER=ON \
+            -DLICHII_BUILD_PLATFORM=${{ matrix.platform }} \
+            -DUSE_DISCORD_PRESENCE=OFF \
+            -DUSE_CCACHE=ON
+
       - name: Save CPM downloads
         if: steps.cpm-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
@@ -195,43 +278,125 @@ jobs:
           path: .cache/cpm
           key: ${{ steps.cpm-cache.outputs.cache-primary-key }}
 
+      # ── Build ──────────────────────────────────────────────────────────────
       - name: Build
         shell: bash
         run: |
+          set -euo pipefail
           if command -v sccache > /dev/null; then sccache --zero-stats; fi
+          if command -v ccache > /dev/null; then ccache -z; fi
           cmake --build build/release --target yuzu --parallel
           if command -v sccache > /dev/null; then sccache --show-stats; fi
+          if command -v ccache > /dev/null; then ccache -s; fi
 
       - name: Stop sccache on Windows
-        if: always() && steps.compiler-cache.outcome == 'success'
+        if: startsWith(matrix.platform, 'windows') && always() && steps.compiler-cache-win.outcome == 'success'
         shell: pwsh
         run: if (Get-Command sccache -ErrorAction SilentlyContinue) { sccache --stop-server 2>$null; $global:LASTEXITCODE = 0 }
 
-      - name: Save compiler objects
-        if: always() && steps.compiler-cache.outcome == 'success'
+      - name: Save compiler objects (Windows)
+        if: startsWith(matrix.platform, 'windows') && always() && steps.compiler-cache-win.outcome == 'success'
         uses: actions/cache/save@v5
         with:
           path: .sccache
-          key: ${{ steps.compiler-cache.outputs.cache-primary-key }}
+          key: ${{ steps.compiler-cache-win.outputs.cache-primary-key }}
 
+      - name: Save compiler objects (Linux)
+        if: startsWith(matrix.platform, 'linux') && always() && steps.compiler-cache-linux.outcome == 'success'
+        uses: actions/cache/save@v5
+        with:
+          path: .ccache
+          key: ${{ steps.compiler-cache-linux.outputs.cache-primary-key }}
+
+      # ── Package & Upload ───────────────────────────────────────────────────
       - name: Package Windows binary
+        if: startsWith(matrix.platform, 'windows')
         shell: pwsh
         run: |
           if (Test-Path "build/release/bin/cheezyemu.exe") {
-            Move-Item -Force "build/release/bin/cheezyemu.exe" "build/release/bin/FritCheeLii v5.3.exe"
+            Move-Item -Force "build/release/bin/cheezyemu.exe" "build/release/bin/FritCheeLii v5.4.exe"
           }
-          if (-not (Test-Path "build/release/bin/FritCheeLii v5.3.exe")) {
-            throw "build/release/bin/FritCheeLii v5.3.exe was not produced"
+          if (-not (Test-Path "build/release/bin/FritCheeLii v5.4.exe")) {
+            throw "build/release/bin/FritCheeLii v5.4.exe was not produced"
           }
-          windeployqt --release --no-translations "build/release/bin/FritCheeLii v5.3.exe"
+          windeployqt --release --no-translations "build/release/bin/FritCheeLii v5.4.exe"
 
       - name: Upload Windows binary
+        if: startsWith(matrix.platform, 'windows')
         uses: actions/upload-artifact@v7
         with:
           name: FritCheeLii-${{ matrix.platform }}-${{ github.sha }}
           path: build/release/bin/
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
+
+      - name: Package Linux AppImage and tar.gz
+        if: startsWith(matrix.platform, 'linux')
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x build/release/bin/cheezyemu
+          mv build/release/bin/cheezyemu build/release/bin/FritCheeLii
+          strip build/release/bin/FritCheeLii
+
+          tools="$RUNNER_TEMP/linuxdeploy"
+          mkdir -p "$tools"
+          curl -fsSL -o "$tools/linuxdeploy-x86_64.AppImage" \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          curl -fsSL -o "$tools/linuxdeploy-plugin-qt-x86_64.AppImage" \
+            https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x "$tools"/*.AppImage
+
+          icon="$RUNNER_TEMP/fritcheelii.png"
+          cp dist/cheezyemu.png "$icon"
+          desktop="$RUNNER_TEMP/FritCheeLii.desktop"
+          cat > "$desktop" <<'DESK'
+          [Desktop Entry]
+          Type=Application
+          Name=FritCheeLii
+          Exec=FritCheeLii
+          Icon=fritcheelii
+          Categories=Game;Emulator;
+          Terminal=false
+          DESK
+
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          export QMAKE="$QT_ROOT_DIR/bin/qmake"
+          export EXTRA_QT_MODULES=waylandcompositor
+          export EXTRA_PLATFORM_PLUGINS='libqwayland-egl.so;libqwayland-generic.so'
+          export LDAI_VERSION="v5.4-${GITHUB_SHA::7}"
+          export LDAI_OUTPUT="FritCheeLii-v5.4-Linux-x86_64.AppImage"
+          export OUTPUT="$LDAI_OUTPUT"
+          export ARCH="x86_64"
+
+          mkdir -p AppDir/usr/bin linux-dist
+          if [ -f build/release/bin/nx2_switches.txt ]; then
+            cp build/release/bin/nx2_switches.txt AppDir/usr/bin/
+          fi
+
+          "$tools/linuxdeploy-x86_64.AppImage" --appdir AppDir \
+            --executable build/release/bin/FritCheeLii \
+            --exclude-library 'libvulkan.so*' \
+            --desktop-file "$desktop" \
+            --icon-file "$icon" \
+            --plugin qt \
+            --output appimage
+
+          test -s "$LDAI_OUTPUT"
+          mv "$LDAI_OUTPUT" linux-dist/
+          mv AppDir "FritCheeLii-v5.4"
+          ln -s usr/bin/FritCheeLii "FritCheeLii-v5.4/FritCheeLii"
+          tar -czf "linux-dist/FritCheeLii-v5.4-Linux-x86_64.tar.gz" "FritCheeLii-v5.4"
+          ls -la linux-dist
+
+      - name: Upload Linux binary
+        if: startsWith(matrix.platform, 'linux')
+        uses: actions/upload-artifact@v7
+        with:
+          name: FritCheeLii-${{ matrix.platform }}-${{ github.sha }}
+          path: linux-dist/
+          if-no-files-found: error
+          retention-days: 1
 
   release:
     name: Publish release
@@ -240,20 +405,29 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      actions: write
     steps:
-      - name: Download binaries
+      - name: Download Windows binary
         uses: actions/download-artifact@v7
         with:
           name: FritCheeLii-windows-x86_64-pgo-${{ github.sha }}
-          path: "stage/FritCheeLii v5.3"
+          path: "stage/FritCheeLii v5.4"
+
+      - name: Download Linux binaries
+        uses: actions/download-artifact@v7
+        with:
+          name: FritCheeLii-linux-x86_64-${{ github.sha }}
+          path: dist
 
       - name: Package release files
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
-          test -f "stage/FritCheeLii v5.3/FritCheeLii v5.3.exe"
-          (cd stage && zip -qr "${GITHUB_WORKSPACE}/dist/FritCheeLii-v5.3.zip" "FritCheeLii v5.3")
+          test -f "stage/FritCheeLii v5.4/FritCheeLii v5.4.exe"
+          (cd stage && zip -qr "${GITHUB_WORKSPACE}/dist/FritCheeLii-v5.4-Windows-x64.zip" "FritCheeLii v5.4")
+          test -f "dist/FritCheeLii-v5.4-Linux-x86_64.AppImage"
+          test -f "dist/FritCheeLii-v5.4-Linux-x86_64.tar.gz"
           ls -la dist
 
       - name: Create release
@@ -263,7 +437,7 @@ jobs:
         run: |
           set -euo pipefail
           retry() { local n; for n in 1 2 3 4; do "$@" && return 0; echo "::warning::attempt $n of '$*' failed; retrying" >&2; sleep $((n * 30)); done; return 1; }
-          tag="v5.3"
+          tag="v5.4"
           tag_sha=$(retry gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" --jq '.object.sha')
           if [ "$tag_sha" != "$GITHUB_SHA" ]; then
             echo "Release tag ${tag} points to $tag_sha instead of $GITHUB_SHA"
@@ -271,22 +445,27 @@ jobs:
           fi
           base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}"
           cat > notes.md <<EOF
-          # FritCheeLii v5.3
+          # FritCheeLii v5.4
 
-          ## Download (Windows 64-bit · Clang 22.1.8 + ThinLTO + PGO)
-          - **[FritCheeLii-v5.3.zip](${base}/FritCheeLii-v5.3.zip)**
+          ## Downloads
+          - **Windows 64-bit (Clang + ThinLTO + PGO):** [${tag} Windows x64](${base}/FritCheeLii-v5.4-Windows-x64.zip)
+          - **Linux / Steam Deck (AppImage):** [${tag} Linux AppImage](${base}/FritCheeLii-v5.4-Linux-x86_64.AppImage)
+          - **Linux / Steam Deck (Portable tar.gz):** [${tag} Linux tar.gz](${base}/FritCheeLii-v5.4-Linux-x86_64.tar.gz)
 
-          Extraia o arquivo \`FritCheeLii-v5.3.zip\` — ele criará a pasta **\`FritCheeLii v5.3\`** contendo o executável **\`FritCheeLii v5.3.exe\`**.
+          > **Updating from an older version?** Keep or copy your existing \`user\` folder into the new FritCheeLii folder to preserve your saves, settings, and compiled shader cache (no need to rebuild shaders!).
 
-          ## What's New in v5.3
-          - **Sleek Home Save Slot Pill + \`Saves\` Picker Toggle:** replaced the Home dropdown with a clean clickable \`Save: Slot N — Name\` pill button that opens the visual 4×2 8-slot thumbnail picker, and added the \`Ask which save slot before playing\` checkbox inside \`Saves\`
-          - **Full PC Layout Support for PlayStation & Steam Deck:** added \`PlayStation (PC Layout — ✕ Confirm)\` and \`Steam Deck (PC Layout — A Confirm)\` alongside \`Xbox (PC Layout — A Confirm)\`, all with automatic \`A↔B / X↔Y\` swap and physical diamond layout support via \`Common.blarc.zs\`
+          ## What's New in v5.4
+          - **Built-in OoT Button Icons & PC-Layout Auto-Patcher (Zero Nintendo Assets):** select Xbox, PlayStation, PC, or Steam Deck (including \`PC Layout\` with physical bottom-A / \`A Falar\` diamond repositioning) in **Controls** — FritCheeLii automatically patches your own game RomFS on first launch and caches it locally
+          - **Linux x86_64 / Steam Deck Support:** added official \`AppImage\` and \`.tar.gz\` builds alongside Windows PGO
+          - **Lichii \`build-386\` Fixes Ported:**
+            - **Interleaved GPFIFO Hang Fix (\`#2415\`):** resolves OoT hangs caused by interleaved GPFIFO register calls
+            - **OoT Texture Header Fix (\`#2384\`):** restricts Switch Sports byte-offset header decoding so OoT walls/floors always sample the right textures
+            - **Windows Fastmem Partial Unmap Fix (\`#2361\`):** preserves page protections across partial unmaps
 
-          ## Highlights from v5.2
-          - **Fast \`v4.2\` TextureCache Restored + Castle Town 4-Frame \`BadOverlap\` Fix:** keeps maximum FPS on 4–16 GB GPUs without touching live scene textures while preventing Castle Town dead shadow-map VRAM leaks
-          - **Refined \`PerformanceOverlay\`:** top banner shows RAM bus/channel only (\`DDR4 2666 MHz (Dual Channel)\`), \`RAM\` row displays used / total GB, and removed frozen ACPI CPU temperature reading
-          - **Restored 1-Click \`30 FPS ↔ 60 FPS\` Status-Bar Toggle** from \`v4.2\`
-          - **8-Slot Visual 4×2 Save Picker + Gold \`★ Manual\` Highlight** & **Timestamped Log History + \`Help → Export Logs (.zip)...\`**
+          ## Highlights from v5.3
+          - **Sleek Home Save Slot Pill + \`Saves\` Picker Toggle:** clickable \`Save: Slot N — Name\` pill button opening the visual 4×2 8-slot thumbnail picker
+          - **Full PC Layout Support for Xbox, PlayStation & Steam Deck** with automatic \`A↔B / X↔Y\` swap
+          - **Fast \`v4.2\` TextureCache + Castle Town 4-Frame \`BadOverlap\` Fix** (~2.7 GB VRAM on 4 GB GPUs)
 
           ## Credits
           Built on GPL open-source code with advancements from **Fritchii v6.5 (Frizti & Bakemono)**, **CheezyEmu**, **Lichii**, **Triforce**, **Eglantine**, **Eden / Yuzu**, and **Dark (Dynamic FPS)**.
@@ -296,6 +475,23 @@ jobs:
           gh release create "${tag}" dist/* \
             --repo "${GITHUB_REPOSITORY}" \
             --verify-tag \
+            --draft \
             --prerelease \
-            --title "FritCheeLii v5.3" \
+            --title "FritCheeLii v5.4" \
             --notes-file notes.md
+
+      - name: Delete temporary Actions artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for art_name in \
+            "FritCheeLii-windows-x86_64-pgo-${GITHUB_SHA}" \
+            "FritCheeLii-linux-x86_64-${GITHUB_SHA}"; do
+            art_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
+              --jq ".artifacts[] | select(.name == \"${art_name}\") | .id" | head -n 1 || true)
+            if [ -n "${art_id}" ]; then
+              gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/${art_id}" || true
+            fi
+          done

@@ -6822,6 +6822,18 @@ Debug Message: </source>
         <source>Estimated Time %1</source>
         <translation>Залишилося приблизно %1</translation>
     </message>
+    <message>
+        <source>Gathering this game's shaders (once, about a minute)...</source>
+        <translation>Збирання шейдерів цієї гри (один раз, близько хвилини)...</translation>
+    </message>
+    <message>
+        <source>Building shaders %1 / %2 (just this once)</source>
+        <translation>Компіляція шейдерів %1 / %2 (лише цього разу)</translation>
+    </message>
+    <message>
+        <source>Tip: Shaders, saves &amp; settings are saved in the 'user' folder — keep or copy 'user' when updating FritCheeLii so you never have to rebuild.</source>
+        <translation>Порада: Шейдери, збереження та налаштування зберігаються в папці 'user' — збережіть або скопіюйте папку 'user' під час оновлення FritCheeLii, щоб не компілювати знову.</translation>
+    </message>
 </context>
 <context>
     <name>Lobby</name>

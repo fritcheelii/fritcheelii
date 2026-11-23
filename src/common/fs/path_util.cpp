@@ -112,8 +112,12 @@ public:
         fs::path eden_path_cache;
         fs::path eden_path_config;
 #ifdef _WIN32
-        // User directory takes priority over global %AppData% directory
+        // Portable-first: always try creating/using `<exe_dir>\user` dynamically;
+        // fall back to %AppData%\Roaming only if the executable directory is not writable.
         eden_path = GetExeDirectory() / PORTABLE_DIR;
+        if (!Exists(eden_path) || !IsDir(eden_path)) {
+            void(FS::CreateDirs(eden_path));
+        }
         if (!Exists(eden_path) || !IsDir(eden_path)) {
             eden_path = GetAppDataRoamingDirectory() / EDEN_DIR;
         }

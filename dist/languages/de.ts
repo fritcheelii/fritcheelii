@@ -6822,6 +6822,18 @@ Fehlerbehebungs-Meldung: </translation>
         <source>Estimated Time %1</source>
         <translation>Geschätzte Zeit: %1</translation>
     </message>
+    <message>
+        <source>Gathering this game's shaders (once, about a minute)...</source>
+        <translation>Shader dieses Spiels werden gesammelt (einmalig, ca. eine Minute)...</translation>
+    </message>
+    <message>
+        <source>Building shaders %1 / %2 (just this once)</source>
+        <translation>Shader werden erstellt %1 / %2 (nur dieses eine Mal)</translation>
+    </message>
+    <message>
+        <source>Tip: Shaders, saves &amp; settings are saved in the 'user' folder — keep or copy 'user' when updating FritCheeLii so you never have to rebuild.</source>
+        <translation>Tipp: Shader, Spielstände &amp; Einstellungen werden im Ordner 'user' gespeichert — behalte oder kopiere 'user' beim Aktualisieren von FritCheeLii, damit du nie neu kompilieren musst.</translation>
+    </message>
 </context>
 <context>
     <name>Lobby</name>
