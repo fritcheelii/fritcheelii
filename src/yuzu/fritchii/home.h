@@ -26,6 +26,7 @@ struct HomeHooks {
     std::function<void()> open_settings;
     std::function<void(u64 program_id, const std::string& path)> game_settings;
     std::function<void(u64 program_id)> delete_shader_cache; ///< after a confirmation
+    std::function<void(const QString& path, u64 program_id, u8 mode)> build_shader_cache;
     /// Fills a menu with the game list's own right-click entries for the game (mod folders,
     /// dumps, Remove, Verify Integrity, Configure Game...).
     std::function<void(QMenu& menu, u64 program_id, const std::string& path)> game_menu;

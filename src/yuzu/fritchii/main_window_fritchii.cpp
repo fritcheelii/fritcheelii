@@ -13,6 +13,7 @@
 #include "qt_common/qt_common.h"
 #include "qt_common/util/game.h"
 #include "ui_main.h"
+#include "video_core/shader_warm/shader_warm_builder.h"
 #include "yuzu/bootmanager.h"
 #include "yuzu/fritchii/fritchii_ui.h"
 #include "yuzu/fritchii/game_controls.h"
@@ -45,6 +46,7 @@ void MainWindow::SetUpFritchiiUi() {
         box.exec();
         if (box.clickedButton() == remove) {
             QtCommon::Game::RemoveAllTransferableShaderCaches(program_id);
+            QtCommon::Game::RemoveVulkanDriverPipelineCache(program_id);
         }
     };
 
@@ -112,9 +114,14 @@ void MainWindow::SetUpFritchiiUi() {
     });
     statusBar()->insertPermanentWidget(1, oot_fps_button);
 
-    // Fritchii Home screen + left slim icon rail + top-right Saves & Credits buttons.
+    // Fritchii Home screen + left slim icon rail + top-right Saves, Shader Cache & Credits buttons.
     FritchiiUi::HomeHooks home{
-        .play = [this](const QString& path, u64 program_id) { OnGameListLoadFile(path, program_id); },
+        .play =
+            [this](const QString& path, u64 program_id) {
+                VideoCommon::ShaderWarm::SetStandaloneBuildMode(
+                    VideoCommon::ShaderWarm::StandaloneBuildMode::None);
+                OnGameListLoadFile(path, program_id);
+            },
         .add_folder = [this] { OnGameListAddDirectory(); },
         .open_settings = [this] { OnConfigure(); },
         .game_settings =
@@ -122,6 +129,18 @@ void MainWindow::SetUpFritchiiUi() {
                 OpenPerGameConfiguration(program_id, path);
             },
         .delete_shader_cache = delete_shader_cache,
+        .build_shader_cache =
+            [this](const QString& path, u64 program_id, u8 mode) {
+                VideoCommon::ShaderWarm::SetStandaloneBuildMode(
+                    mode == 2 ? VideoCommon::ShaderWarm::StandaloneBuildMode::FullCache
+                              : VideoCommon::ShaderWarm::StandaloneBuildMode::FastEssential);
+                Settings::values.use_disk_shader_cache.SetValue(true);
+                if (Settings::values.precache_shaders.GetValue() ==
+                    Settings::PrecacheShaders::Off) {
+                    Settings::values.precache_shaders.SetValue(Settings::PrecacheShaders::Always);
+                }
+                OnGameListLoadFile(path, program_id);
+            },
         .game_menu = {},
         .game_list_empty = [this] { return game_list->IsEmpty(); },
         .single_window = [this] { return ui->action_Single_Window_Mode->isChecked(); },

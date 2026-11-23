@@ -89,6 +89,18 @@ bool TakeWarmBeforeStart();
 void RequestSkipWarm();
 bool TakeSkipWarm();
 
+/// Mode for standalone Shader Cache building from the Home screen ("Shader Cache" button).
+enum class StandaloneBuildMode : u8 {
+    None = 0,          ///< Normal game launch via Play
+    FastEssential = 1, ///< Build Fast Essential (~11.4k real-gameplay shaders) then return to Home
+    FullCache = 2,     ///< Build Full 100% Cache (121,364 shaders) then return to Home
+};
+
+void SetStandaloneBuildMode(StandaloneBuildMode mode);
+[[nodiscard]] StandaloneBuildMode GetStandaloneBuildMode();
+[[nodiscard]] bool IsStandaloneBuildOnly();
+[[nodiscard]] bool IsFullCacheRequested();
+
 /// The GPU driver, device and pipeline cache version pipelines were precached for.
 struct DriverStamp {
     u32 driver{};

@@ -9,6 +9,7 @@
 #include "video_core/gpu.h"
 #include "video_core/rasterizer_interface.h"
 #include "video_core/renderer_base.h"
+#include "video_core/shader_warm/shader_warm_builder.h"
 
 EmuThread::EmuThread() {}
 
@@ -37,6 +38,16 @@ void EmuThread::run() {
     emit LoadProgress(VideoCore::LoadCallbackStage::Complete, 0, 0);
 
     gpu.ReleaseContext();
+
+    if (VideoCommon::ShaderWarm::IsStandaloneBuildOnly()) {
+        VideoCommon::ShaderWarm::SetStandaloneBuildMode(
+            VideoCommon::ShaderWarm::StandaloneBuildMode::None);
+        QtCommon::system->DetachDebugger();
+        QtCommon::system->ShutdownMainProcess();
+        QtCommon::system->Exit();
+        return;
+    }
+
     gpu.Start();
 
     QtCommon::system->GetCpuManager().OnGpuReady();

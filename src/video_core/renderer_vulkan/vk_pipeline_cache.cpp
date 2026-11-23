@@ -41,6 +41,7 @@
 #include "video_core/nx2_perf.h"
 #include "core/file_sys/nx2_shader_extract.h"
 #include "video_core/nx2_precompile.h"
+#include "video_core/oot_pareto_pipelines.h"
 #include "video_core/vulkan_common/vulkan_host_allocator.h"
 #include "video_core/nx2_recipe.h"
 #include "video_core/pipeline_cache_files.h"
@@ -1540,10 +1541,13 @@ std::shared_ptr<PipelineCache::RecipeRun> PipelineCache::AddRecipeJobs(
     const std::unordered_set<u64>& precached) {
     namespace ShaderWarm = VideoCommon::ShaderWarm;
     const std::string name = Common::FS::PathToUTF8String(file.filename());
+    const bool full_precache =
+        ShaderWarm::IsFullCacheRequested() || std::getenv("EDEN_NX2_PRECACHE_FULL") != nullptr;
     const auto current = ShaderWarm::CurrentWarmStamp(file, 0, device.GetDriverVersion(),
                                                       device.GetDeviceID(), CACHE_VERSION);
     if (const auto marker = ShaderWarm::ReadWarmMarker(file);
-        current && marker && marker->Matches(*current)) {
+        current && marker && marker->Matches(*current) &&
+        (!full_precache || marker->entries > 50000)) {
         LOG_INFO(Render_Vulkan, "Shader recipe: {} is built for this driver ({} pipelines)", name,
                  marker->entries);
         return nullptr;
@@ -1579,15 +1583,18 @@ std::shared_ptr<PipelineCache::RecipeRun> PipelineCache::AddRecipeJobs(
         }
         struct RecipeEntry {
             u64 offset{};
+            u64 neutral_hash{};
             u64 score{};
             std::array<u32, Maxwell::MaxShaderProgram> ids{};
             u8 count{};
             bool compute{};
+            bool gameplay_verified{};
         };
         std::vector<RecipeEntry> entries;
         entries.reserve(records);
         std::vector<u32> env_freq(environments, 0);
         u64 at = RecipeFileHeader + u64{environments} * 16;
+        size_t gameplay_hits = 0;
         for (u32 record = 0; record < records; ++record) {
             std::array<u8, 4> head;
             in.seekg(static_cast<std::streamoff>(at));
@@ -1603,12 +1610,25 @@ std::shared_ptr<PipelineCache::RecipeRun> PipelineCache::AddRecipeJobs(
             }
             RecipeEntry entry{
                 .offset = at,
+                .neutral_hash = 0,
                 .score = 0,
                 .ids = {},
                 .count = head[1],
                 .compute = head[0] == 1,
+                .gameplay_verified = false,
             };
             in.read(reinterpret_cast<char*>(entry.ids.data()), std::streamsize{head[1]} * 4);
+            if (!entry.compute && !full_precache) {
+                GraphicsPipelineCacheKey recorded_key;
+                in.read(reinterpret_cast<char*>(&recorded_key), sizeof(recorded_key));
+                recorded_key.state.driver_id = 0;
+                recorded_key.state.driver_version = 0;
+                entry.neutral_hash = recorded_key.Hash();
+                entry.gameplay_verified = VideoCommon::IsOotGameplayPipeline(entry.neutral_hash);
+                if (entry.gameplay_verified) {
+                    ++gameplay_hits;
+                }
+            }
             for (u8 s = 0; s < entry.count; ++s) {
                 if (entry.ids[s] < environments) {
                     ++env_freq[entry.ids[s]];
@@ -1618,11 +1638,24 @@ std::shared_ptr<PipelineCache::RecipeRun> PipelineCache::AddRecipeJobs(
             at = next_at;
         }
 
-        // Fast Pareto Shader Precache: prioritize all compute + top ~15k most-reused graphics
-        // pipelines (~10x faster first launch); rare shaders compile smoothly on demand.
-        const bool full_precache = std::getenv("EDEN_NX2_PRECACHE_FULL") != nullptr;
-        constexpr size_t MaxParetoPipelines = 15000;
-        if (!full_precache && entries.size() > MaxParetoPipelines) {
+        // Fast Essential Shader Precache (Real Gameplay Pareto):
+        // When real-gameplay EUP1 pipeline hashes match this recipe (e.g., Zelda OoT's 6,677
+        // verified gameplay graphics pipelines + 4,794 warm-compute programs = 11,471 total,
+        // ~9.45% of 121,364), build ONLY those verified gameplay shaders!
+        if (!full_precache && gameplay_hits > 0) {
+            offsets.reserve(gameplay_hits);
+            for (const auto& entry : entries) {
+                if (!entry.compute && entry.gameplay_verified) {
+                    offsets.push_back(entry.offset);
+                }
+            }
+            std::sort(offsets.begin(), offsets.end());
+            LOG_INFO(Render_Vulkan,
+                     "Shader recipe (Fast Essential — Real Gameplay Pareto): selected {} "
+                     "verified gameplay graphics pipelines of {} records from {}",
+                     offsets.size(), records, name);
+        } else if (!full_precache && entries.size() > 8000) {
+            constexpr size_t MaxParetoPipelines = 8000;
             std::vector<RecipeEntry> graphics_entries;
             graphics_entries.reserve(entries.size());
             size_t compute_count = 0;
@@ -1656,14 +1689,17 @@ std::shared_ptr<PipelineCache::RecipeRun> PipelineCache::AddRecipeJobs(
             }
             std::sort(offsets.begin(), offsets.end());
             LOG_INFO(Render_Vulkan,
-                     "Shader recipe (Fast Pareto): selected {} of {} pipelines ({} compute + {} "
-                     "top graphics) from {}",
+                     "Shader recipe (Fast Pareto fallback): selected {} of {} pipelines ({} "
+                     "compute + {} top graphics) from {}",
                      offsets.size(), records, compute_count, take, name);
         } else {
             offsets.reserve(entries.size());
             for (const auto& entry : entries) {
                 offsets.push_back(entry.offset);
             }
+            LOG_INFO(Render_Vulkan,
+                     "Shader recipe (Full Cache 100%): selected all {} pipelines from {}",
+                     offsets.size(), name);
         }
         run->records = static_cast<u32>(offsets.size());
     } catch (const std::exception& e) {
@@ -2226,7 +2262,7 @@ void PipelineCache::PrecacheShaders(u64 title_id, std::vector<PrecacheJob> jobs,
             }
             if (ShaderWarm::TakeSkipWarm() || PrecacheSkipDue(begin)) {
                 skipped = true;
-                if (PrecacheAfterSkip()) {
+                if (!ShaderWarm::IsStandaloneBuildOnly() && PrecacheAfterSkip()) {
                     after_skip = true;
                 } else {
                     state->cancel = true;

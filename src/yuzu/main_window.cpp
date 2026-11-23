@@ -611,7 +611,11 @@ MainWindow::MainWindow(bool has_broken_vulkan)
     UpdateWindowTitle();
     SetUpFritchiiUi();
 
-    show();
+    if (UISettings::values.geometry.isEmpty()) {
+        showMaximized();
+    } else {
+        show();
+    }
     ShowWhatsNew();
 
 #ifdef ENABLE_UPDATE_CHECKER
@@ -3121,6 +3125,8 @@ void MainWindow::OnEmulationStopped() {
         game_list->PopulateAsync(UISettings::values.game_dirs);
         QTimer::singleShot(0, this, &MainWindow::OfferRecommendedSettings);
     }
+    VideoCommon::ShaderWarm::SetStandaloneBuildMode(
+        VideoCommon::ShaderWarm::StandaloneBuildMode::None);
 }
 
 void MainWindow::ShutdownGame() {

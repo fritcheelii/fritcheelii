@@ -8,9 +8,11 @@
 
 #include <QApplication>
 #include <QBoxLayout>
+#include <QDialog>
 #include <QDir>
 #include <QEvent>
 #include <QFileInfo>
+#include <QFrame>
 #include <QLabel>
 #include <QMainWindow>
 #include <QMenu>
@@ -326,6 +328,102 @@ QWidget* Home::MakePage() {
         RefreshSaveSlots();
     });
     links->addWidget(saves);
+    auto* shader_cache_btn =
+        new QPushButton(Icon(QStringLiteral("sliders"), 18), tr("Shader Cache"), page);
+    shader_cache_btn->setObjectName(QStringLiteral("FritchiiLink"));
+    shader_cache_btn->setIconSize(QSize(18, 18));
+    shader_cache_btn->setCursor(Qt::PointingHandCursor);
+    shader_cache_btn->setFocusPolicy(Qt::NoFocus);
+    connect(shader_cache_btn, &QPushButton::clicked, this, [this] {
+        if (hooks.emulation_running && hooks.emulation_running()) {
+            QMessageBox::information(window, tr("Shader Cache"), tr("Stop the game first."));
+            return;
+        }
+        if (hero_path.isEmpty()) {
+            QMessageBox::information(window, tr("Shader Cache"),
+                                     tr("Add your game folder first to manage or pre-build its "
+                                        "Shader Cache."));
+            return;
+        }
+        QDialog dlg(window);
+        dlg.setWindowTitle(tr("Shader Cache Manager"));
+        dlg.setMinimumWidth(480);
+        auto* vbox = new QVBoxLayout(&dlg);
+        vbox->setContentsMargins(20, 18, 20, 18);
+        vbox->setSpacing(12);
+
+        auto* hdr = new QLabel(
+            tr("<b>Pre-build or manage Shader Cache without starting gameplay</b><br>"
+               "<span style='color:#96969e;font-size:12px;'>You can leave shaders building here "
+               "while idle and play later with zero wait time.</span>"),
+            &dlg);
+        hdr->setWordWrap(true);
+        vbox->addWidget(hdr);
+
+        const auto make_action_btn = [&](const QString& label, const QString& desc,
+                                         const char* border_color, const char* bg_color) {
+            auto* btn = new QPushButton(&dlg);
+            btn->setCursor(Qt::PointingHandCursor);
+            btn->setStyleSheet(QStringLiteral(
+                "QPushButton { background-color: %1; color: #f4f4f0; border: 1px solid %2; "
+                "border-radius: 8px; padding: 12px 14px; text-align: left; font-size: 13px; "
+                "font-weight: 600; }"
+                "QPushButton:hover { border-color: #a78bfa; background-color: #1e1a2e; }")
+                                   .arg(QString::fromLatin1(bg_color),
+                                        QString::fromLatin1(border_color)));
+            btn->setText(label + QStringLiteral("\n") + desc);
+            vbox->addWidget(btn);
+            return btn;
+        };
+
+        auto* fast_btn = make_action_btn(
+            tr("▶  Fast Essential (11,471 shaders — ~9.5%)"),
+            tr("Real-gameplay Pareto shaders (6,677 graphics + 4,794 compute). Best balance & "
+               "mandatory for Play."),
+            "#7c3aed", "#181526");
+        auto* full_btn = make_action_btn(
+            tr("▶  Full Cache (121,364 shaders — 100%)"),
+            tr("Builds every possible shader in the game recipe while idle and returns to Home "
+               "when done."),
+            "#2e2e3a", "#14141b");
+        auto* clear_btn = make_action_btn(
+            tr("🗑  Clear Shader Cache"),
+            tr("Deletes compiled shaders (use after changing your graphics card/driver or to fix "
+               "visual glitches)."),
+            "#4a2228", "#1a1215");
+
+        auto* close_row = new QHBoxLayout;
+        close_row->addStretch(1);
+        auto* cancel_btn = new QPushButton(tr("Close"), &dlg);
+        connect(cancel_btn, &QPushButton::clicked, &dlg, &QDialog::reject);
+        close_row->addWidget(cancel_btn);
+        vbox->addLayout(close_row);
+
+        int action = 0;
+        connect(fast_btn, &QPushButton::clicked, &dlg, [&] {
+            action = 1;
+            dlg.accept();
+        });
+        connect(full_btn, &QPushButton::clicked, &dlg, [&] {
+            action = 2;
+            dlg.accept();
+        });
+        connect(clear_btn, &QPushButton::clicked, &dlg, [&] {
+            action = 3;
+            dlg.accept();
+        });
+        if (dlg.exec() != QDialog::Accepted) {
+            return;
+        }
+        if (action == 1 && hooks.build_shader_cache) {
+            hooks.build_shader_cache(hero_path, hero_id, 1);
+        } else if (action == 2 && hooks.build_shader_cache) {
+            hooks.build_shader_cache(hero_path, hero_id, 2);
+        } else if (action == 3 && hooks.delete_shader_cache) {
+            hooks.delete_shader_cache(hero_id ? hero_id : OcarinaOfTime);
+        }
+    });
+    links->addWidget(shader_cache_btn);
     auto* credits = new QPushButton(Icon(QStringLiteral("heart"), 18),
                                     tr("Credits"), page);
     credits->setObjectName(QStringLiteral("FritchiiLink"));
