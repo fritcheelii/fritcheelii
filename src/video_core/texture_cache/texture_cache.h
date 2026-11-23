@@ -256,7 +256,7 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
         // Fritchii v6.2 Thrash Guard: keep hot textures used in the last 12 frames alive under
         // 4 GB VRAM pressure so they are not deleted and recreated dozens of times per frame.
         if (smart_gc_4gb && !out_of_memory) {
-            ticks_to_destroy = (std::max)(ticks_to_destroy, 12ULL);
+            ticks_to_destroy = (std::max)(ticks_to_destroy, u64{12});
         }
         num_iterations = aggressive_mode ? 40 : (high_priority_mode ? 20 : 10);
         // NX2navi v0.10.1 pressure relief: drain dead render targets faster past expected budget.
