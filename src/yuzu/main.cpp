@@ -219,11 +219,7 @@ int main(int argc, char* argv[]) {
 
     MainWindow main_window{has_broken_vulkan};
     // After settings have been loaded by GMainWindow, apply the filter
-    if (UISettings::values.geometry.isEmpty()) {
-        main_window.showMaximized();
-    } else {
-        main_window.show();
-    }
+    main_window.show();
 
     app.connect(&app, &QGuiApplication::applicationStateChanged, &main_window, &MainWindow::OnAppFocusStateChanged);
     return app.exec();

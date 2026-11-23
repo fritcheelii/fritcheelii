@@ -375,6 +375,14 @@ ConfigureInputPlayer::ConfigureInputPlayer(QWidget* parent, std::size_t player_i
                 button, button_id,
                 [=, this](const Common::ParamPackage& params) {
                     emulated_controller->SetButtonParam(button_id, params);
+                    if (player_index == 0) {
+                        auto* p1 = hid_core.GetEmulatedController(Core::HID::NpadIdType::Player1);
+                        auto* hh = hid_core.GetEmulatedController(Core::HID::NpadIdType::Handheld);
+                        auto* other = (emulated_controller == p1) ? hh : p1;
+                        if (other && other != emulated_controller) {
+                            other->SetButtonParam(button_id, params);
+                        }
+                    }
                 },
                 InputCommon::Polling::InputType::Button);
         });
@@ -1013,15 +1021,65 @@ void ConfigureInputPlayer::ClearAll() {
 }
 
 void ConfigureInputPlayer::SwapFaceButtons() {
+    const auto swap_ctrl = [](Core::HID::EmulatedController* ctrl) {
+        if (!ctrl) {
+            return;
+        }
+        const auto a = ctrl->GetButtonParam(Settings::NativeButton::A);
+        const auto b = ctrl->GetButtonParam(Settings::NativeButton::B);
+        const auto x = ctrl->GetButtonParam(Settings::NativeButton::X);
+        const auto y = ctrl->GetButtonParam(Settings::NativeButton::Y);
+        ctrl->SetButtonParam(Settings::NativeButton::A, b);
+        ctrl->SetButtonParam(Settings::NativeButton::B, a);
+        ctrl->SetButtonParam(Settings::NativeButton::X, y);
+        ctrl->SetButtonParam(Settings::NativeButton::Y, x);
+    };
+    if (player_index == 0) {
+        auto* p1 = hid_core.GetEmulatedController(Core::HID::NpadIdType::Player1);
+        auto* hh = hid_core.GetEmulatedController(Core::HID::NpadIdType::Handheld);
+        swap_ctrl(p1);
+        if (hh != p1) {
+            swap_ctrl(hh);
+        }
+    } else {
+        swap_ctrl(emulated_controller);
+    }
+    UpdateUI();
+}
+
+bool ConfigureInputPlayer::AreFaceButtonsSwapped() const {
+    if (!emulated_controller) {
+        return false;
+    }
     const auto a = emulated_controller->GetButtonParam(Settings::NativeButton::A);
     const auto b = emulated_controller->GetButtonParam(Settings::NativeButton::B);
-    const auto x = emulated_controller->GetButtonParam(Settings::NativeButton::X);
-    const auto y = emulated_controller->GetButtonParam(Settings::NativeButton::Y);
-    emulated_controller->SetButtonParam(Settings::NativeButton::A, b);
-    emulated_controller->SetButtonParam(Settings::NativeButton::B, a);
-    emulated_controller->SetButtonParam(Settings::NativeButton::X, y);
-    emulated_controller->SetButtonParam(Settings::NativeButton::Y, x);
-    UpdateUI();
+    if (a.Has("button") && b.Has("button")) {
+        // On SDL/XInput controllers, physical bottom (South) is button 0 and right (East) is 1.
+        // Default Nintendo layout maps Switch A (right) -> button 1 and Switch B (bottom) -> 0.
+        // Swapped PC layout maps Switch A (confirm) -> button 0 and Switch B (back) -> button 1.
+        const int a_btn = a.Get("button", -1);
+        const int b_btn = b.Get("button", -1);
+        if (a_btn == 0 && b_btn == 1) {
+            return true;
+        }
+        if (a_btn == 1 && b_btn == 0) {
+            return false;
+        }
+        return a_btn < b_btn;
+    }
+    if (a.Has("code") && b.Has("code")) {
+        // Default keyboard maps A -> C (67) and B -> X (88). Swapped maps A -> X (88), B -> C (67).
+        return a.Get("code", 0) > b.Get("code", 0);
+    }
+    return false;
+}
+
+void ConfigureInputPlayer::SetFaceButtonsSwapped(bool want_swapped) {
+    if (AreFaceButtonsSwapped() != want_swapped) {
+        SwapFaceButtons();
+    } else {
+        emit FaceButtonsChanged();
+    }
 }
 
 void ConfigureInputPlayer::UpdateUI() {
@@ -1029,6 +1087,7 @@ void ConfigureInputPlayer::UpdateUI() {
         const Common::ParamPackage param = emulated_controller->GetButtonParam(button);
         button_map[button]->setText(ButtonToText(param));
     }
+    emit FaceButtonsChanged();
 
     const Common::ParamPackage ZL_param =
         emulated_controller->GetButtonParam(Settings::NativeButton::ZL);
@@ -1475,6 +1534,27 @@ void ConfigureInputPlayer::UpdateMappingWithDefaults() {
     for (const auto& motion_mapping : motion_mappings) {
         const std::size_t index = motion_mapping.first;
         emulated_controller->SetMotionParam(index, motion_mapping.second);
+    }
+
+    if (player_index == 0) {
+        auto* p1 = hid_core.GetEmulatedController(Core::HID::NpadIdType::Player1);
+        auto* hh = hid_core.GetEmulatedController(Core::HID::NpadIdType::Handheld);
+        auto* other = (emulated_controller == p1) ? hh : p1;
+        if (other && other != emulated_controller) {
+            for (const auto& button_mapping : button_mappings) {
+                other->SetButtonParam(button_mapping.first, button_mapping.second);
+            }
+            for (const auto& analog_mapping : analog_mappings) {
+                other->SetStickParam(analog_mapping.first, analog_mapping.second);
+            }
+            for (const auto& motion_mapping : motion_mappings) {
+                other->SetMotionParam(motion_mapping.first, motion_mapping.second);
+            }
+        }
+        if (pc_layout_active || Settings::values.oot_button_icons.GetValue() >= 5) {
+            SetFaceButtonsSwapped(true);
+            return;
+        }
     }
 
     UpdateUI();

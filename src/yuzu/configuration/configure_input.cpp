@@ -136,21 +136,52 @@ void ConfigureInput::Initialize(InputCommon::InputSubsystem* input_subsystem,
             const int cur_icons = Settings::values.oot_button_icons.GetValue();
             combo_oot_button_icons->setCurrentIndex(
                 cur_icons >= 0 && cur_icons < combo_oot_button_icons->count() ? cur_icons : 0);
-            auto* swap_btn = new QPushButton(tr("Swap A↔B / X↔Y"), player_tabs[i]);
+            player_controllers[0]->SetPcLayoutActive(combo_oot_button_icons->currentIndex() >= 5);
+            auto* swap_btn = new QPushButton(player_tabs[i]);
+            swap_btn->setCheckable(true);
+            swap_btn->setCursor(Qt::PointingHandCursor);
             swap_btn->setToolTip(
-                tr("Swaps A↔B and X↔Y on Player 1 controller so physical A confirms (PC style)."));
-            connect(swap_btn, &QPushButton::clicked, this,
-                    [this]() { player_controllers[0]->SwapFaceButtons(); });
-            int prev_icon_index = combo_oot_button_icons->currentIndex();
-            connect(combo_oot_button_icons, &QComboBox::activated, this,
-                    [this, prev_icon_index](int index) mutable {
-                        const bool was_pc_layout = (prev_icon_index >= 5);
-                        const bool is_pc_layout = (index >= 5);
-                        if (was_pc_layout != is_pc_layout) {
-                            player_controllers[0]->SwapFaceButtons();
+                tr("Toggles A↔B and X↔Y swap on Player 1 controller so physical bottom button "
+                   "(A / ✕) confirms (PC style)."));
+            const auto update_swap_btn = [this, swap_btn]() {
+                const bool swapped = player_controllers[0]->AreFaceButtonsSwapped();
+                swap_btn->setChecked(swapped);
+                swap_btn->setText(swapped ? tr("Swap A↔B / X↔Y: ON") : tr("Swap A↔B / X↔Y: OFF"));
+                swap_btn->setStyleSheet(
+                    swapped
+                        ? QStringLiteral(
+                              "QPushButton { background-color: #7c3aed; color: #ffffff; "
+                              "border: 1px solid #a78bfa; border-radius: 6px; padding: 4px 12px; "
+                              "font-weight: 700; }"
+                              "QPushButton:hover { background-color: #8b5cf6; }")
+                        : QStringLiteral(
+                              "QPushButton { background-color: #181820; color: #96969e; "
+                              "border: 1px solid #2e2e3a; border-radius: 6px; padding: 4px 12px; "
+                              "font-weight: 600; }"
+                              "QPushButton:hover { border-color: #525266; color: #e4e4ec; }"));
+            };
+            connect(swap_btn, &QPushButton::clicked, this, [this, update_swap_btn]() {
+                player_controllers[0]->SwapFaceButtons();
+                update_swap_btn();
+            });
+            connect(player_controllers[0], &ConfigureInputPlayer::FaceButtonsChanged, this,
+                    update_swap_btn);
+            connect(player_controllers[0], &ConfigureInputPlayer::RefreshInputDevices, this,
+                    [this, update_swap_btn]() {
+                        if (combo_oot_button_icons && combo_oot_button_icons->currentIndex() >= 5) {
+                            player_controllers[0]->SetPcLayoutActive(true);
+                            player_controllers[0]->SetFaceButtonsSwapped(true);
                         }
-                        prev_icon_index = index;
+                        update_swap_btn();
                     });
+            connect(combo_oot_button_icons, &QComboBox::activated, this,
+                    [this, update_swap_btn](int index) {
+                        const bool is_pc_layout = (index >= 5);
+                        player_controllers[0]->SetPcLayoutActive(is_pc_layout);
+                        player_controllers[0]->SetFaceButtonsSwapped(is_pc_layout);
+                        update_swap_btn();
+                    });
+            update_swap_btn();
             icons_row->addWidget(icons_lbl);
             icons_row->addWidget(combo_oot_button_icons);
             icons_row->addWidget(swap_btn);
@@ -316,6 +347,7 @@ void ConfigureInput::LoadConfiguration() {
         const int cur_icons = Settings::values.oot_button_icons.GetValue();
         combo_oot_button_icons->setCurrentIndex(
             cur_icons >= 0 && cur_icons < combo_oot_button_icons->count() ? cur_icons : 0);
+        player_controllers[0]->SetPcLayoutActive(combo_oot_button_icons->currentIndex() >= 5);
     }
 }
 

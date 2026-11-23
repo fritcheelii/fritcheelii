@@ -421,6 +421,22 @@ PerformanceOverlay::PerformanceOverlay(MainWindow* parent)
 
 PerformanceOverlay::~PerformanceOverlay() = default;
 
+bool& PerformanceOverlay::ShowDetailsFlag() {
+    static bool show = true;
+    return show;
+}
+
+bool& PerformanceOverlay::ShowHwBannerFlag() {
+    static bool show = true;
+    return show;
+}
+
+void PerformanceOverlay::RefreshFromSettings() {
+    Relayout();
+    Place();
+    update();
+}
+
 QRect PerformanceOverlay::Area() const {
     const QWidget* const surface = m_main_window->GameSurface();
     if (surface == nullptr) {
@@ -480,7 +496,7 @@ void PerformanceOverlay::Relayout() {
                                         std::max(value.horizontalAdvance(m_ram_text),
                                                  value.horizontalAdvance(m_vram_text)));
         }
-        if (m_show_details && (!m_cpu_core_text.isEmpty() || !m_gpu_detail_text.isEmpty())) {
+        if (ShowDetailsFlag() && (!m_cpu_core_text.isEmpty() || !m_gpu_detail_text.isEmpty())) {
             const int names = std::max(label.horizontalAdvance(tr("CPU")),
                                        label.horizontalAdvance(tr("GPU")));
             add(Cell::Kind::Details, names + 8 +
@@ -488,7 +504,7 @@ void PerformanceOverlay::Relayout() {
                                                   value.horizontalAdvance(m_gpu_detail_text)));
         }
     }
-    const bool has_header = !compact && m_show_hw_banner && !m_hw_banner_text.isEmpty();
+    const bool has_header = !compact && ShowHwBannerFlag() && !m_hw_banner_text.isEmpty();
     const int min_banner_w =
         has_header ? Edge + Pad + label.horizontalAdvance(m_hw_banner_text) + Pad : 0;
     const QSize wanted{std::max(x + Pad, min_banner_w),
@@ -735,7 +751,7 @@ void PerformanceOverlay::paintEvent(QPaintEvent*) {
     const QFontMetrics value{m_value};
     const QFontMetrics label{m_label};
     const bool has_header = !UISettings::values.perf_overlay_compact.GetValue() &&
-                            m_show_hw_banner && !m_hw_banner_text.isEmpty();
+                            ShowHwBannerFlag() && !m_hw_banner_text.isEmpty();
     const int y0 = has_header ? HeaderHeight : 0;
     const int h = height() - y0;
     if (has_header) {
@@ -1019,24 +1035,20 @@ void PerformanceOverlay::contextMenuEvent(QContextMenuEvent* event) {
     {
         QAction* const details_act =
             menu.addAction(tr("Details (CPU Single Core • GPU W/°C)"), [this] {
-                m_show_details = !m_show_details;
-                Relayout();
-                Place();
-                update();
+                ShowDetailsFlag() = !ShowDetailsFlag();
+                RefreshFromSettings();
             });
         details_act->setCheckable(true);
-        details_act->setChecked(m_show_details);
+        details_act->setChecked(ShowDetailsFlag());
     }
     {
         QAction* const hw_act =
             menu.addAction(tr("Hardware info (CPU | GPU | RAM)"), [this] {
-                m_show_hw_banner = !m_show_hw_banner;
-                Relayout();
-                Place();
-                update();
+                ShowHwBannerFlag() = !ShowHwBannerFlag();
+                RefreshFromSettings();
             });
         hw_act->setCheckable(true);
-        hw_act->setChecked(m_show_hw_banner);
+        hw_act->setChecked(ShowHwBannerFlag());
     }
 
     QMenu* const opacity = menu.addMenu(tr("Background"));

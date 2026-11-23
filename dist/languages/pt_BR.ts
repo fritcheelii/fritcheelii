@@ -3599,7 +3599,7 @@ Gostaria de deletar o salvamento antigo?</translation>
         <source>Clear</source>
         <translation>Limpar</translation>
     </message>
-</context>
+<message><source>Swap A↔B / X↔Y: ON</source><translation>Swap A↔B / X↔Y: ATIVADO</translation></message><message><source>Swap A↔B / X↔Y: OFF</source><translation>Swap A↔B / X↔Y: DESATIVADO</translation></message><message><source>Toggles A↔B and X↔Y swap on Player 1 controller so physical bottom button (A / ✕) confirms (PC style).</source><translation>Ativa/desativa a inversão de A↔B e X↔Y no controle do Jogador 1 para que o botão físico de baixo (A / ✕) confirme (estilo PC).</translation></message></context>
 <context>
     <name>ConfigureInputAdvanced</name>
     <message>
@@ -9202,7 +9202,7 @@ p, li { white-space: pre-wrap; }
         <source>Favorites</source>
         <translation>Favoritos</translation>
     </message>
-</context>
+<message><source>OVERLAY</source><translation>OVERLAY</translation></message><message><source>Show Benchmark Overlay (Ctrl+V)</source><translation>Mostrar Overlay de Benchmark (Ctrl+V)</translation></message><message><source>Position</source><translation>Posição na Tela</translation></message><message><source>Top left</source><translation>Superior esquerdo</translation></message><message><source>Top centre</source><translation>Superior centro</translation></message><message><source>Top right</source><translation>Superior direito</translation></message><message><source>Bottom left</source><translation>Inferior esquerdo</translation></message><message><source>Bottom centre</source><translation>Inferior centro</translation></message><message><source>Bottom right</source><translation>Inferior direito</translation></message><message><source>Compact (FPS &amp;&amp; Frame Time only)</source><translation>Compacto (apenas FPS e Frame Time)</translation></message><message><source>Frame Rate History Graph</source><translation>Gráfico de Histórico de FPS</translation></message><message><source>RAM &amp;&amp; VRAM Usage</source><translation>Uso de Memória RAM e VRAM</translation></message><message><source>Details (CPU Single Core • GPU W/°C)</source><translation>Detalhes (CPU Single Core • GPU W/°C)</translation></message><message><source>Hardware Info Banner (CPU | GPU | RAM)</source><translation>Faixa de Hardware (CPU | GPU | RAM)</translation></message><message><source>Background Opacity</source><translation>Opacidade do Fundo</translation></message></context>
 <context>
     <name>QtAmiiboSettingsDialog</name>
     <message>
@@ -10724,4 +10724,4 @@ Error code: %3</source>
         <translation type="unfinished" />
     </message>
 </context>
-</TS>
+<context><name>FritchiiUi::Home</name><message><source>✔  Status: Full Cache 100% Built (121,364 / 121,364 shaders ready)</source><translation>✔  Status: Full Cache 100% Compilado (121.364 / 121.364 shaders prontos)</translation></message><message><source>✔  Status: Fast Essential Built (13,136 / 121,364 shaders ready to play!)</source><translation>✔  Status: Fast Essencial Compilado (13.136 / 121.364 shaders prontos para jogar!)</translation></message><message><source>⚪  Status: Not pre-built yet (Fast Essential will run on first Play)</source><translation>⚪  Status: Ainda não pré-compilado (o Fast Essencial rodará no primeiro Jogar)</translation></message><message><source>✔  Fast Essential (13,136 shaders — ~10.8%)  [BUILT / READY]</source><translation>✔  Fast Essencial (13.136 shaders — ~10,8%)  [CONCLUÍDO / PRONTO]</translation></message><message><source>▶  Fast Essential (13,136 shaders — ~10.8%)</source><translation>▶  Fast Essencial (13.136 shaders — ~10,8%)</translation></message><message><source>Real-gameplay Pareto shaders (8,342 graphics + 4,794 compute). Best balance &amp;&amp; mandatory for Play.</source><translation>Shaders reais de gameplay (Pareto: 8.342 gráficos + 4.794 compute). Melhor equilíbrio e obrigatório no Jogar.</translation></message><message><source>✔  Full Cache (121,364 shaders — 100%)  [BUILT / READY]</source><translation>✔  Full Cache Completo (121.364 shaders — 100%)  [CONCLUÍDO / PRONTO]</translation></message><message><source>▶  Full Cache (121,364 shaders — 100%)</source><translation>▶  Full Cache Completo (121.364 shaders — 100%)</translation></message><message><source>🗑  Clear Shader Cache  (Already Empty)</source><translation>🗑  Limpar Shader Cache  (Já está limpo)</translation></message></context></TS>

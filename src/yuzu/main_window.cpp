@@ -611,11 +611,7 @@ MainWindow::MainWindow(bool has_broken_vulkan)
     UpdateWindowTitle();
     SetUpFritchiiUi();
 
-    if (UISettings::values.geometry.isEmpty()) {
-        showMaximized();
-    } else {
-        show();
-    }
+    show();
     ShowWhatsNew();
 
 #ifdef ENABLE_UPDATE_CHECKER
@@ -1667,13 +1663,12 @@ void MainWindow::InitializeHotkeys() {
 }
 
 void MainWindow::SetDefaultUIGeometry() {
-    // geometry: 53% of the window contents are in the upper screen half, 47% in the lower half
-    const QRect screenRect = QGuiApplication::primaryScreen()->geometry();
+    const QRect avail = QGuiApplication::primaryScreen()->availableGeometry();
 
-    const int w = screenRect.width() * 2 / 3;
-    const int h = screenRect.height() * 2 / 3;
-    const int x = (screenRect.x() + screenRect.width()) / 2 - w / 2;
-    const int y = (screenRect.y() + screenRect.height()) / 2 - h * 53 / 100;
+    const int w = std::max(1120, avail.width() * 3 / 4);
+    const int h = std::max(700, avail.height() * 4 / 5);
+    const int x = avail.x() + (avail.width() - w) / 2;
+    const int y = avail.y() + (avail.height() - h) / 2;
 
     setGeometry(x, y, w, h);
 }

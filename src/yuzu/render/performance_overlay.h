@@ -33,6 +33,11 @@ public:
     explicit PerformanceOverlay(MainWindow* parent = nullptr);
     ~PerformanceOverlay() override;
 
+    void RefreshFromSettings();
+
+    static bool& ShowDetailsFlag();
+    static bool& ShowHwBannerFlag();
+
 signals:
     void closed();
 
@@ -102,8 +107,6 @@ private:
     int m_gpu_temp = -1;
     int m_cpu_max_core = -1;
     int m_limit_kind = 0; // 0=normal/capped, 1=cpu, 2=gpu, 3=vram
-    bool m_show_details = true;
-    bool m_show_hw_banner = true;
     QString m_hw_banner_text;
 
     /// Frame rates of the last minute (two samples a second), oldest first.
