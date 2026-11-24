@@ -238,7 +238,7 @@ void MainWindow::SetUpFritchiiUi() {
                                    flag("Tidy1s", Settings::values.test_tex_tidy_1s.GetValue());
                                Common::BenchRecorder::Instance().Start(
                                    30.0, tag,
-                                   Common::FS::GetEdenPath(Common::FS::EdenPath::UserDir) /
+                                   Common::FS::GetEdenPath(Common::FS::EdenPath::EdenDir) /
                                        "benchmarks");
                                bench_timer->start();
                                update_overlay_btn();
