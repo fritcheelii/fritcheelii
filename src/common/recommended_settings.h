@@ -59,7 +59,7 @@ void ForEachRecommendedSetting(Values& config, const HostProfile& host, Func&& f
     entry(config.use_disk_shader_cache, true);
     entry(config.use_vulkan_driver_pipeline_cache, true);
     // CheezyEmu's default since build 9 ("Skip only redrawn targets").
-    entry(config.native_async_draws, NativeAsyncDraws::Transient);
+    entry(config.native_async_draws, NativeAsyncDraws::Skip);
     entry(config.native_pipeline_wait_ms, 8);
     entry(config.precache_shaders, PrecacheShaders::Always);
     entry(config.use_video_framerate, false);

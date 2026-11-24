@@ -108,6 +108,9 @@ private:
     long long min_eta_sec = -1;
     std::size_t last_eta_value = 0;
     std::chrono::steady_clock::time_point last_eta_update{};
+    std::chrono::steady_clock::time_point window_eta_time{};
+    std::size_t window_eta_value = 0;
+    double recent_ms_per_shader = -1.0;
     QString cached_estimate;
 };
 

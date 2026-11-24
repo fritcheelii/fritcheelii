@@ -382,7 +382,7 @@ QWidget* Home::MakePage() {
             cmp_in >> sz >> wt >> compute_done_entries;
         }
         const bool fast_ready = (recipe_done_entries > 0);
-        const bool full_ready = (recipe_done_entries > 50000);
+        const bool full_ready = (recipe_done_entries >= 25000);
         std::error_code cache_ec;
         const bool has_any_cache =
             fast_ready || (compute_done_entries > 0) ||
@@ -396,13 +396,13 @@ QWidget* Home::MakePage() {
                 "QLabel { background-color: #102419; color: #6ee7b7; border: 1px solid #059669; "
                 "border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 700; }"));
             status_box->setText(
-                tr("✔  Status: Full Cache 100% Built (121,364 / 121,364 shaders ready)"));
+                tr("✔  Status: Extended Cache Built (30,000 / 121,364 shaders ready)"));
         } else if (fast_ready) {
             status_box->setStyleSheet(QStringLiteral(
                 "QLabel { background-color: #102419; color: #6ee7b7; border: 1px solid #059669; "
                 "border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 700; }"));
             status_box->setText(
-                tr("✔  Status: Fast Essential Built (13,136 / 121,364 shaders ready to play!)"));
+                tr("✔  Status: Fast Essential Built (9,100 / 121,364 shaders ready to play!)"));
         } else {
             status_box->setStyleSheet(QStringLiteral(
                 "QLabel { background-color: #181822; color: #d4d4dc; border: 1px solid #2e2e3a; "
@@ -430,17 +430,17 @@ QWidget* Home::MakePage() {
 
         auto* fast_btn = make_action_btn(
             fast_ready
-                ? tr("✔  Fast Essential (13,136 shaders — ~10.8%)  [BUILT / READY]")
-                : tr("▶  Fast Essential (13,136 shaders — ~10.8%)"),
-            tr("Real-gameplay Pareto shaders (8,342 graphics + 4,794 compute). Best balance && "
+                ? tr("✔  Fast Essential (9,100 shaders — ~7.5%)  [BUILT / READY]")
+                : tr("▶  Fast Essential (9,100 shaders — ~7.5%)"),
+            tr("Real-gameplay Pareto shaders (8,342 graphics + 758 real compute). Best balance && "
                "mandatory for Play."),
             fast_ready ? "#059669" : "#7c3aed", fast_ready ? "#11221a" : "#181526");
         auto* full_btn = make_action_btn(
             full_ready
-                ? tr("✔  Full Cache (121,364 shaders — 100%)  [BUILT / READY]")
-                : tr("▶  Full Cache (121,364 shaders — 100%)"),
-            tr("Builds every possible shader in the game recipe while idle and returns to Home "
-               "when done."),
+                ? tr("✔  Extended Cache (30,000 shaders — ~25%)  [BUILT / READY]")
+                : tr("▶  Extended Cache (30,000 shaders — ~25%)"),
+            tr("Real gameplay + top recipe shaders (29,242 graphics + 758 real compute) for "
+               "late-game && adult dungeons."),
             full_ready ? "#059669" : "#2e2e3a", full_ready ? "#11221a" : "#14141b");
         auto* clear_btn = make_action_btn(
             has_any_cache ? tr("🗑  Clear Shader Cache")

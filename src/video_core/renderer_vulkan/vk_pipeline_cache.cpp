@@ -41,6 +41,7 @@
 #include "video_core/nx2_perf.h"
 #include "core/file_sys/nx2_shader_extract.h"
 #include "video_core/nx2_precompile.h"
+#include "video_core/oot_pareto_compute.h"
 #include "video_core/oot_pareto_pipelines.h"
 #include "video_core/vulkan_common/vulkan_host_allocator.h"
 #include "video_core/nx2_recipe.h"
@@ -1618,7 +1619,7 @@ std::shared_ptr<PipelineCache::RecipeRun> PipelineCache::AddRecipeJobs(
                 .gameplay_verified = false,
             };
             in.read(reinterpret_cast<char*>(entry.ids.data()), std::streamsize{head[1]} * 4);
-            if (!entry.compute && !full_precache) {
+            if (!entry.compute) {
                 GraphicsPipelineCacheKey recorded_key;
                 in.read(reinterpret_cast<char*>(&recorded_key), sizeof(recorded_key));
                 recorded_key.state.driver_id = 0;
@@ -1692,6 +1693,45 @@ std::shared_ptr<PipelineCache::RecipeRun> PipelineCache::AddRecipeJobs(
                      "Shader recipe (Fast Pareto fallback): selected {} of {} pipelines ({} "
                      "compute + {} top graphics) from {}",
                      offsets.size(), records, compute_count, take, name);
+        } else if (gameplay_hits > 0 && entries.size() > 29242) {
+            constexpr size_t ExtendedGraphicsTarget = 29242;
+            std::vector<RecipeEntry> remaining_graphics;
+            remaining_graphics.reserve(entries.size());
+            offsets.reserve(ExtendedGraphicsTarget);
+            size_t verified_count = 0;
+            for (auto& entry : entries) {
+                if (!entry.compute && entry.gameplay_verified) {
+                    offsets.push_back(entry.offset);
+                    ++verified_count;
+                } else if (!entry.compute) {
+                    u64 score = 0;
+                    for (u8 s = 0; s < entry.count; ++s) {
+                        if (entry.ids[s] < environments) {
+                            score += env_freq[entry.ids[s]];
+                        }
+                    }
+                    entry.score = score;
+                    remaining_graphics.push_back(entry);
+                }
+            }
+            const size_t extra_budget =
+                ExtendedGraphicsTarget > verified_count ? ExtendedGraphicsTarget - verified_count : 0;
+            const size_t take = (std::min)(extra_budget, remaining_graphics.size());
+            if (take < remaining_graphics.size()) {
+                std::partial_sort(
+                    remaining_graphics.begin(),
+                    remaining_graphics.begin() + static_cast<ptrdiff_t>(take),
+                    remaining_graphics.end(),
+                    [](const RecipeEntry& a, const RecipeEntry& b) { return a.score > b.score; });
+            }
+            for (size_t i = 0; i < take; ++i) {
+                offsets.push_back(remaining_graphics[i].offset);
+            }
+            std::sort(offsets.begin(), offsets.end());
+            LOG_INFO(Render_Vulkan,
+                     "Shader recipe (Extended Cache ~25%): selected {} graphics pipelines ({} "
+                     "verified gameplay + {} top recipe) of {} records from {}",
+                     offsets.size(), verified_count, take, records, name);
         } else {
             offsets.reserve(entries.size());
             for (const auto& entry : entries) {
@@ -2150,6 +2190,10 @@ void PipelineCache::PrecacheShaders(u64 title_id, std::vector<PrecacheJob> jobs,
                             CACHE_VERSION);
                 throw std::runtime_error("wrong version");
             }
+            const bool full_precache = VideoCommon::ShaderWarm::IsFullPrecacheRequested();
+            const bool is_oot = (title_id == 0x0400486024DEC000ULL);
+            size_t compute_selected = 0;
+            size_t compute_meta_applied = 0;
             while (file.tellg() != end) {
                 u32 num_envs{};
                 file.read(reinterpret_cast<char*>(&num_envs), sizeof(num_envs));
@@ -2162,6 +2206,34 @@ void PipelineCache::PrecacheShaders(u64 title_id, std::vector<PrecacheJob> jobs,
                 ComputePipelineCacheKey key;
                 file.read(reinterpret_cast<char*>(&key), sizeof(key));
                 ++file_entries;
+                const VideoCommon::OotComputeMeta* meta =
+                    is_oot ? VideoCommon::FindOotComputeMeta(key.unique_hash) : nullptr;
+                if (is_oot && meta == nullptr) {
+                    continue;
+                }
+                if (meta != nullptr) {
+                    key.shared_memory_size = meta->shared_memory_size;
+                    key.workgroup_size = meta->workgroup_size;
+                    env.SetComputeMetadata(meta->shared_memory_size, meta->workgroup_size);
+                    for (u32 i = 0; i < meta->tt_cnt; ++i) {
+                        const auto& e = VideoCommon::OOT_COMPUTE_TT[meta->tt_off + i];
+                        env.AddHintTextureType(e.key, e.value);
+                    }
+                    for (u32 i = 0; i < meta->tpf_cnt; ++i) {
+                        const auto& e = VideoCommon::OOT_COMPUTE_TPF[meta->tpf_off + i];
+                        env.AddHintTexturePixelFormat(e.key, e.value);
+                    }
+                    for (u32 i = 0; i < meta->cb_cnt; ++i) {
+                        const auto& e = VideoCommon::OOT_COMPUTE_CB[meta->cb_off + i];
+                        env.AddHintCbufValue(e.key, e.value);
+                    }
+                    for (u32 i = 0; i < meta->spt_cnt; ++i) {
+                        const auto& e = VideoCommon::OOT_COMPUTE_SPT[meta->spt_off + i];
+                        env.AddHintStoragePointerType(e.key, e.value);
+                    }
+                    ++compute_meta_applied;
+                }
+                ++compute_selected;
                 // Programs already in the disk cache were built above; leave them out.
                 if (compute_cache.contains(key)) {
                     continue;
@@ -2174,6 +2246,13 @@ void PipelineCache::PrecacheShaders(u64 title_id, std::vector<PrecacheJob> jobs,
                                                                  true)
                                                .pipeline != nullptr;
                                 }});
+            }
+            if (is_oot) {
+                LOG_INFO(Render_Vulkan,
+                         "Shader precache ({}): selected {} compute shaders of {} ({} with real "
+                         "gameplay metadata)",
+                         full_precache ? "Full Cache 100%" : "Fast Essential — Real Compute Warmup",
+                         compute_selected, file_entries, compute_meta_applied);
             }
             compute_pending = true;
         } catch (const std::exception& e) {

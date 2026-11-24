@@ -331,6 +331,9 @@ void LoadingScreen::OnLoadProgress(VideoCore::LoadCallbackStage stage, std::size
         min_eta_sec = -1;
         last_eta_value = 0;
         last_eta_update = {};
+        window_eta_time = {};
+        window_eta_value = 0;
+        recent_ms_per_shader = -1.0;
         cached_estimate.clear();
     }
     // update the max of the progress bar if the number of shaders change
@@ -350,42 +353,69 @@ void LoadingScreen::OnLoadProgress(VideoCore::LoadCallbackStage stage, std::size
             slow_shader_start = steady_clock::now();
             slow_shader_compile_start = true;
             slow_shader_first_value = value;
+            window_eta_time = slow_shader_start;
+            window_eta_value = value;
+            recent_ms_per_shader = -1.0;
         }
-        // Calculate a monotonic (non-increasing) ETA after a 4s warmup and 40+ shaders:
-        // Pad the initial estimate by 15% for background system load, then strictly decrease so
-        // the countdown never jumps back up (if the PC is fast, it simply counts down faster).
+        // Update a 4-second sliding-window rate so heavy stretches (e.g. compute shaders near the
+        // end) are detected quickly instead of letting an optimistic cumulative average burn down
+        // to 00:01 prematurely.
+        const auto win_diff = duration_cast<milliseconds>(now - window_eta_time);
+        if (win_diff >= seconds{4} && value > window_eta_value) {
+            const double win_rate =
+                static_cast<double>(win_diff.count()) / static_cast<double>(value - window_eta_value);
+            recent_ms_per_shader = (recent_ms_per_shader < 0.0)
+                                       ? win_rate
+                                       : (0.60 * recent_ms_per_shader + 0.40 * win_rate);
+            window_eta_time = now;
+            window_eta_value = value;
+        }
+        // Calculate a monotonic (non-increasing) ETA after a 5s warmup and 80+ shaders:
+        // Pad the initial estimate by 30% for background system load and use the slower of
+        // cumulative vs recent rate, only stepping down when the real estimate is lower so the
+        // countdown holds steady during slow stretches instead of getting stuck at 00:01.
         const auto diff = duration_cast<milliseconds>(now - slow_shader_start);
-        if (diff >= seconds{4} && value >= slow_shader_first_value + 40 && total > value) {
+        if (diff >= seconds{5} && value >= slow_shader_first_value + 80 && total > value) {
             if (min_eta_sec < 0 || (now - last_eta_update >= milliseconds{1000})) {
-                const double remaining_ms =
-                    static_cast<double>(total - value) * static_cast<double>(diff.count()) /
+                const double cum_ms_per_shader =
+                    static_cast<double>(diff.count()) /
                     static_cast<double>(value - slow_shader_first_value);
+                const double effective_ms_per_shader =
+                    (recent_ms_per_shader > 0.0)
+                        ? std::max(cum_ms_per_shader, recent_ms_per_shader)
+                        : cum_ms_per_shader;
+                const double remaining_ms =
+                    static_cast<double>(total - value) * effective_ms_per_shader;
                 smoothed_eta_ms = (smoothed_eta_ms < 0.0)
-                                      ? (remaining_ms * 1.15)
-                                      : (0.75 * smoothed_eta_ms + 0.25 * remaining_ms);
+                                      ? (remaining_ms * 1.30)
+                                      : (0.70 * smoothed_eta_ms + 0.30 * remaining_ms);
                 const long long candidate_sec =
                     std::max<long long>(1, static_cast<long long>(smoothed_eta_ms / 1000.0 + 0.5));
                 if (min_eta_sec < 0) {
                     min_eta_sec = candidate_sec;
                 } else if (candidate_sec < min_eta_sec) {
-                    min_eta_sec = candidate_sec;
-                } else if (value > last_eta_value && min_eta_sec > 1) {
-                    --min_eta_sec;
+                    const long long delta = min_eta_sec - candidate_sec;
+                    const long long step = std::max<long long>(1, delta / 2);
+                    min_eta_sec = std::max<long long>(candidate_sec, min_eta_sec - step);
                 }
                 last_eta_value = value;
-                const long long total_sec = min_eta_sec;
-                const long long hrs = total_sec / 3600;
-                const long long mins = (total_sec % 3600) / 60;
-                const long long secs = total_sec % 60;
-                const QString formatted =
-                    hrs > 0 ? QStringLiteral("%1:%2:%3")
-                                  .arg(hrs)
-                                  .arg(mins, 2, 10, QLatin1Char('0'))
-                                  .arg(secs, 2, 10, QLatin1Char('0'))
-                            : QStringLiteral("%1:%2")
-                                  .arg(mins, 2, 10, QLatin1Char('0'))
-                                  .arg(secs, 2, 10, QLatin1Char('0'));
-                cached_estimate = tr("Estimated Time %1").arg(formatted);
+                if (min_eta_sec <= 1) {
+                    cached_estimate = tr("Finishing...");
+                } else {
+                    const long long total_sec = min_eta_sec;
+                    const long long hrs = total_sec / 3600;
+                    const long long mins = (total_sec % 3600) / 60;
+                    const long long secs = total_sec % 60;
+                    const QString formatted =
+                        hrs > 0 ? QStringLiteral("%1:%2:%3")
+                                      .arg(hrs)
+                                      .arg(mins, 2, 10, QLatin1Char('0'))
+                                      .arg(secs, 2, 10, QLatin1Char('0'))
+                                : QStringLiteral("%1:%2")
+                                      .arg(mins, 2, 10, QLatin1Char('0'))
+                                      .arg(secs, 2, 10, QLatin1Char('0'));
+                    cached_estimate = tr("Estimated Time %1").arg(formatted);
+                }
                 last_eta_update = now;
             }
             estimate = cached_estimate;

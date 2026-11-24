@@ -251,6 +251,22 @@ public:
     void SetGuessMissing(const GuessMissing* guess_) noexcept {
         guess = guess_;
     }
+    void SetComputeMetadata(u32 shared_mem, std::array<u32, 3> wg_size) noexcept {
+        shared_memory_size = shared_mem;
+        workgroup_size = wg_size;
+    }
+    void AddHintTextureType(u32 key, u32 value) {
+        texture_types.insert_or_assign(key, static_cast<Shader::TextureType>(value));
+    }
+    void AddHintTexturePixelFormat(u32 key, u32 value) {
+        texture_pixel_formats.insert_or_assign(key, static_cast<Shader::TexturePixelFormat>(value));
+    }
+    void AddHintCbufValue(u64 key, u32 value) {
+        cbuf_values.insert_or_assign(key, value);
+    }
+    void AddHintStoragePointerType(u64 key, u8 value) {
+        storage_pointer_types.insert_or_assign(key, value);
+    }
     ~FileEnvironment() override = default;
 
     FileEnvironment& operator=(FileEnvironment&&) noexcept = default;
