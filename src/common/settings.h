@@ -466,6 +466,12 @@ struct Values {
                                         Category::Miscellaneous};
     Setting<bool> test_host_zstd{linkage, false, "test_host_zstd", Category::Miscellaneous};
     Setting<bool> test_vram_gc_4gb{linkage, false, "test_vram_gc_4gb", Category::Miscellaneous};
+    Setting<bool> test_fast_astc_decoder{linkage, false, "test_fast_astc_decoder",
+                                           Category::Miscellaneous};
+    Setting<bool> test_exact_byte_readback{linkage, false, "test_exact_byte_readback",
+                                             Category::Miscellaneous};
+    Setting<bool> test_precache_crash_skip{linkage, false, "test_precache_crash_skip",
+                                             Category::Miscellaneous};
     // 0 = Switch (Default), 1 = Xbox, 2 = PlayStation, 3 = PC, 4 = Steam Deck
     Setting<int> oot_button_icons{linkage, 0, "oot_button_icons", Category::Miscellaneous};
     // Ocarina of Time docked: FSR writes 4K (the default), or 1440p, the game's own docked image,

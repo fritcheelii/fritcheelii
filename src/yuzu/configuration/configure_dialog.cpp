@@ -178,12 +178,32 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
                "Recommended for 4 GB GPUs (e.g. GTX 1650)."),
             Settings::values.test_vram_gc_4gb.GetValue());
 
+        auto* cb_fast_astc = add_switch(
+            tr("Fast ASTC GPU Decoder (Longshot LDS + Loop Hoisting)"),
+            tr("Uses Longshot's optimized ASTC compute decoder (LDS scratchpad + loop hoisting, "
+               "~5.3x faster on non-ASTC desktop GPUs like GTX 1650 / RTX / AMD / Intel). "
+               "Requires game restart."),
+            Settings::values.test_fast_astc_decoder.GetValue());
+
+        auto* cb_byte_rb = add_switch(
+            tr("Exact Byte Readback — Culling Anti-Stall (Longshot #2366)"),
+            tr("Checks exact byte-level GPU-modified ranges in BufferCache::GetFlushArea instead "
+               "of 4 KB page alignment to avoid false GPU->CPU stalls on double-buffered OoT "
+               "culling tables."),
+            Settings::values.test_exact_byte_readback.GetValue());
+
+        auto* cb_crash_skip = add_switch(
+            tr("Shader Precache Crash-Skip Journal (Longshot #2323)"),
+            tr("Records in-flight shader hashes during precache so if a GPU driver hangs or "
+               "crashes on a single shader, the next launch automatically skips only that shader."),
+            Settings::values.test_precache_crash_skip.GetValue());
+
         v->addStretch(1);
         scroll->setWidget(content);
         outer->addWidget(scroll);
 
         apply_graphics_test = [cb_mip, cb_shadow, cb_poll, cb_changebank, cb_jit, cb_occl, cb_tidy,
-                               cb_zstd, cb_vram_gc]() {
+                               cb_zstd, cb_vram_gc, cb_fast_astc, cb_byte_rb, cb_crash_skip]() {
             Settings::values.test_4k_mip_cap.SetValue(cb_mip->isChecked());
             Settings::values.test_shadow_size_steps.SetValue(cb_shadow->isChecked());
             Settings::values.test_poll_backoff.SetValue(cb_poll->isChecked());
@@ -193,6 +213,9 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
             Settings::values.test_tex_tidy_1s.SetValue(cb_tidy->isChecked());
             Settings::values.test_host_zstd.SetValue(cb_zstd->isChecked());
             Settings::values.test_vram_gc_4gb.SetValue(cb_vram_gc->isChecked());
+            Settings::values.test_fast_astc_decoder.SetValue(cb_fast_astc->isChecked());
+            Settings::values.test_exact_byte_readback.SetValue(cb_byte_rb->isChecked());
+            Settings::values.test_precache_crash_skip.SetValue(cb_crash_skip->isChecked());
         };
     }
     ui->tabWidget->addTab(graphics_test_tab.get(), tr("Test"));

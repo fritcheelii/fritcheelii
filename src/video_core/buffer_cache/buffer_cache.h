@@ -19,8 +19,10 @@
 #include <vector>
 #include <fmt/ranges.h>
 
+#include "common/bench_recorder.h"
 #include "common/scope_exit.h"
 #include "common/range_sets.inc"
+#include "common/settings.h"
 #include "video_core/buffer_cache/buffer_cache_base.h"
 #include "video_core/buffer_cache/multi_range_refresh.h"
 #include "video_core/buffer_cache/uniform_stream_reuse.h"
@@ -394,6 +396,10 @@ std::optional<VideoCore::RasterizerDownloadArea> BufferCache<P>::GetFlushArea(DA
     };
     area->preemtive = !IsRegionGpuModified(device_addr_start_aligned,
                                            device_addr_end_aligned - device_addr_start_aligned);
+    if (!area->preemtive && Settings::values.test_exact_byte_readback.GetValue() &&
+        !gpu_modified_ranges.Intersects(device_addr, size)) {
+        area->preemtive = true;
+    }
     NoteReadBack(device_addr_start_aligned, device_addr_end_aligned, !area->preemtive);
     // TEST (EDEN_NX2_READ_CHECK): a read an early download serves takes a flush, which compares
     // what it finds with the GPU's bytes now.
@@ -470,6 +476,18 @@ std::optional<VideoCore::RasterizerDownloadArea> BufferCache<P>::GetFlushArea(DA
 
 template <class P>
 void BufferCache<P>::DownloadMemory(DAddr device_addr, u64 size) {
+    const bool bench_active = Common::BenchRecorder::Instance().IsActive();
+    const auto bench_start =
+        bench_active ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    SCOPE_EXIT {
+        if (bench_active) {
+            const auto us = std::chrono::duration_cast<std::chrono::microseconds>(
+                                std::chrono::steady_clock::now() - bench_start)
+                                .count();
+            Common::BenchRecorder::Instance().AddReadbackUs(
+                static_cast<u64>((std::max<s64>)(0, us)));
+        }
+    };
     if constexpr (USE_MEMORY_MAPS) {
         if (download_cpu_read_ranges) {
             download_cpu_read_ranges = false;

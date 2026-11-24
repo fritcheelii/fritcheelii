@@ -451,6 +451,8 @@ jobs:
           - **Smart \`Extended Cache\` (30,000 shaders / ~25%):** replaces the redundant 121k full build with \`8,342\` verified gameplay graphics + \`20,900\` highest-frequency late-game/adult-dungeon recipe graphics + \`758\` real compute shaders (~4× faster than 121k without wasting ~91k dead variations)
           - **Default \`Native Async Draws = Skip\`:** eliminates \`0 FPS\` shader compilation stalls during combat hits, damage effects, and area transitions by compiling unbuilt effects asynchronously in the background (while still waiting on \`<=64x64\` auto-exposure targets and storage writes so lighting stays intact)
           - **Improved Shader Precache ETA (Sliding Window + \`Finishing...\`):** tracks a 4-second sliding-window speed alongside the cumulative average with a 30% initial safety margin and never forces a premature countdown to \`00:01\`, showing \`Finishing...\` during the final heavy shaders
+          - **Embedded A/B Benchmark Recorder (30s CSV in \`OVERLAY\`):** records per-frame frametimes, \`Avg FPS\`, \`1% Low\`, \`0.1% Low\`, stutters \`>33ms\`/\`>60ms\`, **ASTC Decode ms**, and **GPU->CPU Readback ms** to \`user/benchmarks/*.csv\` and copies a clean A/B summary to clipboard
+          - **3 Longshot v3.2.0 Test Lab Experiments (OFF by default):** \`Fast ASTC GPU Decoder\` (LDS scratchpad + loop hoisting), \`Exact Byte Readback — Culling Anti-Stall\`, and \`Shader Precache Crash-Skip Journal\` ready for isolated A/B testing
 
           ## Highlights from v5.7 – v5.8
           - **Isolated Portable NVIDIA Shader Cache (\`user/cache/nvidia-cache\`):** on Windows, FritCheeLii sets \`__GL_SHADER_DISK_CACHE_PATH\` inside \`user/cache/nvidia-cache\` (with 8 GiB limit & cleanup disabled) before Vulkan/NVIDIA driver init so other games and updates never evict your compiled OoT shaders (inspired by **Larbaco / NX2Saria**)
@@ -459,7 +461,7 @@ jobs:
           - **Physical PC-Layout Button Swap Fix & \`ON / OFF\` Indicator + \`OVERLAY\` Button + Centered First Launch:** order-independent \`PC Layout\` swap, live status badges in \`Shader Cache Manager\`, one-click \`OVERLAY\` status bar menu, and clean centered first-launch window
 
           ## Credits
-          Built on GPL open-source code with advancements from **Fritchii v6.5 (Frizti & Bakemono)**, **CheezyEmu**, **Lichii**, **NX2Saria (Larbaco)**, **Triforce**, **Eglantine**, **Eden / Yuzu**, and **Dark (Dynamic FPS)**.
+          Built on GPL open-source code with advancements from **Fritchii v6.5 (Frizti & Bakemono)**, **CheezyEmu**, **Lichii**, **Longshot (MagicBeanDev)**, **NX2Saria (Larbaco)**, **Triforce**, **Eglantine**, **Eden / Yuzu**, and **Dark (Dynamic FPS)**.
           EOF
 
           gh release delete "${tag}" --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true

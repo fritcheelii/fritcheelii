@@ -15,11 +15,14 @@
 #include "video_core/renderer_vulkan/vk_texture_cache.h"
 
 #include "common/assert.h"
+#include "common/bench_recorder.h"
 #include "common/common_types.h"
 #include "common/logging.h"
 #include "common/div_ceil.h"
+#include "common/settings.h"
 #include "common/vector_math.h"
 #include "video_core/host_shaders/astc_decoder_comp_spv.h"
+#include "video_core/host_shaders/astc_decoder_fast_comp_spv.h"
 #include "video_core/host_shaders/bc_encoder_comp_spv.h"
 #include "video_core/host_shaders/queries_prefix_scan_sum_comp_spv.h"
 #include "video_core/host_shaders/queries_prefix_scan_sum_nosubgroups_comp_spv.h"
@@ -192,6 +195,9 @@ struct AstcPushConstants {
     u32 block_height;
     u32 block_height_mask;
     u32 native_tiling;
+    u32 blocks_x;
+    u32 blocks_y;
+    u32 srgb;
 };
 
 constexpr std::array<VkDescriptorSetLayoutBinding, 2> BC_ENCODER_DESCRIPTOR_SET_BINDINGS{{
@@ -670,10 +676,18 @@ ASTCDecoderPass::ASTCDecoderPass(const Device& device_, Scheduler& scheduler_,
                                  MemoryAllocator& memory_allocator_)
     : ComputePass(device_, scheduler_, descriptor_pool_, ASTC_DESCRIPTOR_SET_BINDINGS,
                   ASTC_PASS_DESCRIPTOR_UPDATE_TEMPLATE_ENTRY, ASTC_BANK_INFO,
-                  COMPUTE_PUSH_CONSTANT_RANGE<sizeof(AstcPushConstants)>, ASTC_DECODER_COMP_SPV),
+                  COMPUTE_PUSH_CONSTANT_RANGE<sizeof(AstcPushConstants)>,
+                  Settings::values.test_fast_astc_decoder.GetValue()
+                      ? std::span<const u32>(ASTC_DECODER_FAST_COMP_SPV)
+                      : std::span<const u32>(ASTC_DECODER_COMP_SPV)),
       scheduler{scheduler_}, staging_buffer_pool{staging_buffer_pool_},
       compute_pass_descriptor_queue{compute_pass_descriptor_queue_}, memory_allocator{
-                                                                         memory_allocator_} {}
+                                                                         memory_allocator_} {
+    LOG_INFO(Render_Vulkan, "ASTC GPU decoder: {}",
+             Settings::values.test_fast_astc_decoder.GetValue()
+                 ? "Fast (Longshot LDS + Loop Hoisting)"
+                 : "Standard");
+}
 
 ASTCDecoderPass::~ASTCDecoderPass() = default;
 
@@ -716,6 +730,10 @@ void ASTCDecoderPass::AssembleInto(const VideoCommon::ImageInfo& info, u32 skip,
                                    const StagingBufferRef& map,
                                    std::span<const VideoCommon::SwizzleParameters> swizzles) {
     using namespace VideoCommon::Accelerated;
+    const bool bench_active = Common::BenchRecorder::Instance().IsActive();
+    const auto bench_start =
+        bench_active ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    const u32 is_srgb = VideoCore::Surface::IsPixelFormatSRGB(info.format) ? 1U : 0U;
     const std::array<u32, 2> block_dims{
         VideoCore::Surface::DefaultBlockWidth(info.format),
         VideoCore::Surface::DefaultBlockHeight(info.format),
@@ -777,7 +795,10 @@ void ASTCDecoderPass::AssembleInto(const VideoCommon::ImageInfo& info, u32 skip,
             params.layer_stride = input_layer_stride;
             const u32 num_dispatches_x = Common::DivCeil(swizzle.num_tiles.width, 8U);
             const u32 num_dispatches_y = Common::DivCeil(swizzle.num_tiles.height, 8U);
+            const u32 blocks_x = swizzle.num_tiles.width;
+            const u32 blocks_y = swizzle.num_tiles.height;
             scheduler.Record([this, num_dispatches_x, num_dispatches_y, block_dims, params,
+                              blocks_x, blocks_y, is_srgb,
                               descriptor_data](vk::CommandBuffer cmdbuf) {
                 const AstcPushConstants uniforms{
                     .blocks_dims = block_dims,
@@ -787,6 +808,9 @@ void ASTCDecoderPass::AssembleInto(const VideoCommon::ImageInfo& info, u32 skip,
                     .block_height = params.block_height,
                     .block_height_mask = params.block_height_mask,
                     .native_tiling = params.native_tiling,
+                    .blocks_x = blocks_x,
+                    .blocks_y = blocks_y,
+                    .srgb = is_srgb,
                 };
                 const VkDescriptorSet set = descriptor_allocator.Commit();
                 device.GetLogical().UpdateDescriptorSet(set, *descriptor_template, descriptor_data);
@@ -819,8 +843,11 @@ void ASTCDecoderPass::AssembleInto(const VideoCommon::ImageInfo& info, u32 skip,
         ASSERT(params.origin == (std::array<u32, 3>{0, 0, 0}));
         ASSERT(params.destination == (std::array<s32, 3>{0, 0, 0}));
         ASSERT(params.bytes_per_block_log2 == 4);
+        const u32 blocks_x = swizzle.num_tiles.width;
+        const u32 blocks_y = swizzle.num_tiles.height;
         scheduler.Record([this, num_dispatches_x, num_dispatches_y, num_dispatches_z, block_dims,
-                          params, descriptor_data](vk::CommandBuffer cmdbuf) {
+                          params, blocks_x, blocks_y, is_srgb,
+                          descriptor_data](vk::CommandBuffer cmdbuf) {
             const AstcPushConstants uniforms{
                 .blocks_dims = block_dims,
                 .layer_stride = params.layer_stride,
@@ -829,6 +856,9 @@ void ASTCDecoderPass::AssembleInto(const VideoCommon::ImageInfo& info, u32 skip,
                 .block_height = params.block_height,
                 .block_height_mask = params.block_height_mask,
                 .native_tiling = params.native_tiling,
+                .blocks_x = blocks_x,
+                .blocks_y = blocks_y,
+                .srgb = is_srgb,
             };
             const VkDescriptorSet set = descriptor_allocator.Commit();
             device.GetLogical().UpdateDescriptorSet(set, *descriptor_template, descriptor_data);
@@ -866,6 +896,12 @@ void ASTCDecoderPass::AssembleInto(const VideoCommon::ImageInfo& info, u32 skip,
         return value == nullptr || value[0] != '0';
     }();
     if (!target.wait) {
+        if (bench_active) {
+            const auto us = std::chrono::duration_cast<std::chrono::microseconds>(
+                                std::chrono::steady_clock::now() - bench_start)
+                                .count();
+            Common::BenchRecorder::Instance().AddAstcUs(static_cast<u64>((std::max<s64>)(0, us)));
+        }
         return;
     }
     const auto start = std::chrono::steady_clock::now();
@@ -875,6 +911,11 @@ void ASTCDecoderPass::AssembleInto(const VideoCommon::ImageInfo& info, u32 skip,
         scheduler.Finish();
     }
     const auto end = std::chrono::steady_clock::now();
+    if (bench_active) {
+        const auto us =
+            std::chrono::duration_cast<std::chrono::microseconds>(end - bench_start).count();
+        Common::BenchRecorder::Instance().AddAstcUs(static_cast<u64>((std::max<s64>)(0, us)));
+    }
     static u32 decodes{};
     static std::chrono::nanoseconds waited{};
     static auto window_start = end;

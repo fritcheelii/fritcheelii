@@ -1548,7 +1548,7 @@ std::shared_ptr<PipelineCache::RecipeRun> PipelineCache::AddRecipeJobs(
                                                       device.GetDeviceID(), CACHE_VERSION);
     if (const auto marker = ShaderWarm::ReadWarmMarker(file);
         current && marker && marker->Matches(*current) &&
-        (!full_precache || marker->entries > 50000)) {
+        (!full_precache || marker->entries >= 25000)) {
         LOG_INFO(Render_Vulkan, "Shader recipe: {} is built for this driver ({} pipelines)", name,
                  marker->entries);
         return nullptr;
@@ -1818,7 +1818,8 @@ std::shared_ptr<PipelineCache::RecipeRun> PipelineCache::AddRecipeJobs(
             std::scoped_lock lock{run->mutex};
             run->built.push_back(hash);
             return true;
-        }});
+        },
+        offset | (1ULL << 63)});
     }
     LOG_INFO(Render_Vulkan, "Shader recipe: {} pipelines in {} to look at", offsets.size(), name);
     return run;
@@ -2190,7 +2191,8 @@ void PipelineCache::PrecacheShaders(u64 title_id, std::vector<PrecacheJob> jobs,
                             CACHE_VERSION);
                 throw std::runtime_error("wrong version");
             }
-            const bool full_precache = VideoCommon::ShaderWarm::IsFullPrecacheRequested();
+            const bool full_precache = VideoCommon::ShaderWarm::IsFullCacheRequested() ||
+                                       std::getenv("EDEN_NX2_PRECACHE_FULL") != nullptr;
             const bool is_oot = (title_id == 0x0400486024DEC000ULL);
             size_t compute_selected = 0;
             size_t compute_meta_applied = 0;
@@ -2245,13 +2247,14 @@ void PipelineCache::PrecacheShaders(u64 title_id, std::vector<PrecacheJob> jobs,
                                     return CreateComputePipeline(pools, key, env, nullptr, false,
                                                                  true)
                                                .pipeline != nullptr;
-                                }});
+                                },
+                                key.unique_hash});
             }
             if (is_oot) {
                 LOG_INFO(Render_Vulkan,
                          "Shader precache ({}): selected {} compute shaders of {} ({} with real "
                          "gameplay metadata)",
-                         full_precache ? "Full Cache 100%" : "Fast Essential — Real Compute Warmup",
+                         full_precache ? "Extended Cache ~25%" : "Fast Essential — Real Compute Warmup",
                          compute_selected, file_entries, compute_meta_applied);
             }
             compute_pending = true;
@@ -2267,6 +2270,49 @@ void PipelineCache::PrecacheShaders(u64 title_id, std::vector<PrecacheJob> jobs,
     }
 
     const auto begin = std::chrono::steady_clock::now();
+    const bool crash_skip_enabled = Settings::values.test_precache_crash_skip.GetValue();
+    const std::filesystem::path shader_dir = warm_file.parent_path();
+    const std::filesystem::path inflight_path = shader_dir / "precache_inflight.txt";
+    const std::filesystem::path skiplist_path = shader_dir / "precache_skiplist.txt";
+    std::unordered_set<u64> crash_skiplist;
+    if (crash_skip_enabled) {
+        std::error_code fs_ec;
+        std::filesystem::create_directories(shader_dir, fs_ec);
+        if (std::filesystem::exists(inflight_path, fs_ec)) {
+            std::ifstream in_f(inflight_path);
+            std::ofstream out_s(skiplist_path, std::ios::app);
+            std::string tok;
+            size_t promoted = 0;
+            while (in_f >> tok) {
+                if (out_s.is_open()) {
+                    out_s << tok << '\n';
+                }
+                ++promoted;
+            }
+            in_f.close();
+            std::filesystem::remove(inflight_path, fs_ec);
+            if (promoted > 0) {
+                LOG_WARNING(Render_Vulkan,
+                            "Shader precache Crash-Skip: previous run aborted with {} in-flight "
+                            "shader(s); added to skiplist",
+                            promoted);
+            }
+        }
+        if (std::filesystem::exists(skiplist_path, fs_ec)) {
+            std::ifstream in_s(skiplist_path);
+            u64 h = 0;
+            while (in_s >> std::hex >> h) {
+                if (h != 0) {
+                    crash_skiplist.insert(h);
+                }
+            }
+            if (!crash_skiplist.empty()) {
+                LOG_INFO(Render_Vulkan,
+                         "Shader precache Crash-Skip: loaded {} skipped shader ID(s)",
+                         crash_skiplist.size());
+            }
+        }
+    }
     // Two CPU threads stay free, and the builds run below normal priority: with the driver's
     // own heaps (vulkan_host_allocator.h) the builds really do use every thread they get, for as
     // long as the build lasts, and the rest of the PC has to stay usable meanwhile.
@@ -2286,12 +2332,20 @@ void PipelineCache::PrecacheShaders(u64 title_id, std::vector<PrecacheJob> jobs,
         // commit limit and 16 threads were compiling the largest pipelines), none during the
         // game while its own shaders build.
         std::atomic<size_t> allowed_threads{};
+        bool crash_skip_enabled = false;
+        std::filesystem::path inflight_path;
+        std::unordered_set<u64> crash_skiplist;
+        std::mutex inflight_mutex;
+        std::unordered_set<u64> inflight_ids;
         std::vector<std::jthread> threads;
     };
     const auto state = std::make_shared<BuildState>();
     state->jobs = std::move(jobs);
     state->built.resize(state->jobs.size());
     state->allowed_threads = num_threads;
+    state->crash_skip_enabled = crash_skip_enabled;
+    state->inflight_path = inflight_path;
+    state->crash_skiplist = std::move(crash_skiplist);
     const size_t num_jobs = state->jobs.size();
     u32 short_of_memory_ticks = 0;
     u32 memory_check_ticks = 0;
@@ -2321,11 +2375,41 @@ void PipelineCache::PrecacheShaders(u64 title_id, std::vector<PrecacheJob> jobs,
                     if (index >= s->jobs.size()) {
                         break;
                     }
+                    const auto& job = s->jobs[index];
+                    const u64 job_id =
+                        job.graphics_hash != 0
+                            ? job.graphics_hash
+                            : (job.crash_id != 0 ? job.crash_id
+                                                 : (static_cast<u64>(index) | (1ULL << 62)));
+                    if (s->crash_skip_enabled && s->crash_skiplist.contains(job_id)) {
+                        s->jobs[index].build = {};
+                        s->done.fetch_add(1);
+                        continue;
+                    }
+                    const auto write_inflight_locked = [&] {
+                        std::ofstream out(s->inflight_path, std::ios::trunc);
+                        if (out.is_open()) {
+                            for (const u64 id : s->inflight_ids) {
+                                out << std::hex << id << '\n';
+                            }
+                            out.flush();
+                        }
+                    };
+                    if (s->crash_skip_enabled) {
+                        std::scoped_lock lock{s->inflight_mutex};
+                        s->inflight_ids.insert(job_id);
+                        write_inflight_locked();
+                    }
                     try {
                         // Built and destroyed here: only the driver's cache keeps it.
                         s->built[index] = s->jobs[index].build();
                     } catch (const std::exception& e) {
                         LOG_DEBUG(Render_Vulkan, "Shader precache: {}", e.what());
+                    }
+                    if (s->crash_skip_enabled) {
+                        std::scoped_lock lock{s->inflight_mutex};
+                        s->inflight_ids.erase(job_id);
+                        write_inflight_locked();
                     }
                     s->jobs[index].build = {};
                     s->done.fetch_add(1);
@@ -2408,6 +2492,10 @@ void PipelineCache::PrecacheShaders(u64 title_id, std::vector<PrecacheJob> jobs,
     auto finish = [this, state, recipe, precached = std::move(precached), title_id, graphics_jobs,
                    compute_pending, file_entries, warm_file, begin](bool complete, bool stopped,
                                                                     const char* how) mutable {
+        if (state->crash_skip_enabled) {
+            std::error_code rm_ec;
+            std::filesystem::remove(state->inflight_path, rm_ec);
+        }
         const size_t total_built = static_cast<size_t>(
             std::count(state->built.begin(), state->built.end(), u8{1}));
         if (compute_pending && complete) {

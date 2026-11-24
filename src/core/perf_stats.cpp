@@ -13,6 +13,7 @@
 #include <thread>
 #include <fmt/chrono.h>
 #include <fmt/ranges.h>
+#include "common/bench_recorder.h"
 #include "common/fs/file.h"
 #include "common/fs/fs.h"
 #include "common/fs/path_util.h"
@@ -72,10 +73,11 @@ void PerfStats::EndSystemFrame() {
 
     auto frame_end = Clock::now();
     const auto frame_time = frame_end - frame_begin;
+    const double ft_ms = std::chrono::duration<double, std::milli>(frame_time).count();
     if (current_index < perf_history.size()) {
-        perf_history[current_index++] =
-            std::chrono::duration<double, std::milli>(frame_time).count();
+        perf_history[current_index++] = ft_ms;
     }
+    Common::BenchRecorder::Instance().RecordFrame(ft_ms);
     accumulated_frametime += frame_time;
     system_frames += 1;
 

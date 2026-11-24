@@ -3,13 +3,19 @@
 
 // MainWindow's Fritchii minimalist UI setup on top of CheezyEmu 12's engine.
 
+#include <cmath>
+
 #include <QActionGroup>
 #include <QApplication>
+#include <QClipboard>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QStatusBar>
+#include <QTimer>
 
+#include "common/bench_recorder.h"
+#include "common/fs/path_util.h"
 #include "common/settings.h"
 #include "core/core.h"
 #include "qt_common/config/uisettings.h"
@@ -126,13 +132,62 @@ void MainWindow::SetUpFritchiiUi() {
     overlay_button->setToolTip(
         tr("Benchmark & Performance Overlay (Ctrl+V): toggle on/off, position, compact mode, "
            "FPS graph, RAM/VRAM, CPU Single-Core / GPU W & °C, and hardware banner."));
-    const auto update_overlay_btn = [this, overlay_button]() {
-        overlay_button->setChecked(ui->action_Show_Performance_Overlay->isChecked());
+    const auto update_overlay_btn = [overlay_button, this]() {
+        auto& bench = Common::BenchRecorder::Instance();
+        if (bench.IsActive()) {
+            const int rem = static_cast<int>(std::ceil(bench.RemainingSec()));
+            overlay_button->setText(QStringLiteral("REC %1s").arg(rem));
+        } else {
+            overlay_button->setText(QObject::tr("OVERLAY"));
+        }
+        overlay_button->setChecked(bench.IsActive() ||
+                                   ui->action_Show_Performance_Overlay->isChecked());
     };
+    auto* const bench_timer = new QTimer(this);
+    bench_timer->setInterval(250);
+    connect(bench_timer, &QTimer::timeout, this, [this, bench_timer, update_overlay_btn] {
+        update_overlay_btn();
+        Common::BenchRecorder::Summary summary;
+        if (Common::BenchRecorder::Instance().TakeCompletedSummary(summary)) {
+            bench_timer->stop();
+            update_overlay_btn();
+            const QString report =
+                QObject::tr(
+                    "Frames: %1 (%2s)\n"
+                    "Avg FPS: %3   |   1% Low: %4   |   0.1% Low: %5\n"
+                    "Avg Frame Time: %6 ms   |   Max Spike: %7 ms\n"
+                    "Stutters >33.3ms: %8   |   Stutters >60ms: %9\n"
+                    "ASTC Decode: %10 ms (%11 calls)\n"
+                    "GPU->CPU Readback: %12 ms (%13 calls)\n\n"
+                    "Active Profile: %14\n"
+                    "CSV Saved: %15")
+                    .arg(summary.total_frames)
+                    .arg(summary.elapsed_sec, 0, 'f', 1)
+                    .arg(summary.avg_fps, 0, 'f', 1)
+                    .arg(summary.low_1_fps, 0, 'f', 1)
+                    .arg(summary.low_01_fps, 0, 'f', 1)
+                    .arg(summary.avg_ft_ms, 0, 'f', 2)
+                    .arg(summary.max_ft_ms, 0, 'f', 1)
+                    .arg(summary.frames_over_33ms)
+                    .arg(summary.frames_over_60ms)
+                    .arg(summary.total_astc_ms, 0, 'f', 2)
+                    .arg(summary.astc_calls)
+                    .arg(summary.total_readback_ms, 0, 'f', 2)
+                    .arg(summary.readback_calls)
+                    .arg(QString::fromStdString(summary.profile_tag))
+                    .arg(QString::fromStdString(summary.csv_path));
+            if (auto* cb = QApplication::clipboard()) {
+                cb->setText(report);
+            }
+            QMessageBox::information(this, QObject::tr("A/B Benchmark Complete (Copied to Clipboard)"),
+                                     report);
+        }
+    });
     update_overlay_btn();
     connect(ui->action_Show_Performance_Overlay, &QAction::toggled, this,
             [update_overlay_btn](bool) { update_overlay_btn(); });
-    connect(overlay_button, &QPushButton::clicked, this, [this, overlay_button, update_overlay_btn] {
+    connect(overlay_button, &QPushButton::clicked, this,
+            [this, overlay_button, bench_timer, update_overlay_btn] {
         update_overlay_btn();
         auto& uis = UISettings::values;
         QMenu menu(overlay_button);
@@ -157,6 +212,38 @@ void MainWindow::SetUpFritchiiUi() {
             });
         show_act->setCheckable(true);
         show_act->setChecked(ui->action_Show_Performance_Overlay->isChecked());
+
+        if (Common::BenchRecorder::Instance().IsActive()) {
+            menu.addAction(QObject::tr("⏹  Stop A/B Benchmark Recording"), [update_overlay_btn] {
+                Common::BenchRecorder::Instance().StopNow();
+                update_overlay_btn();
+            });
+        } else {
+            menu.addAction(QObject::tr("⏱  Record A/B Benchmark (30s CSV)"),
+                           [bench_timer, update_overlay_btn] {
+                               const auto flag = [](const char* name, bool on) {
+                                   return std::string(name) + (on ? "=ON" : "=OFF");
+                               };
+                               const std::string tag =
+                                   flag("FastASTC", Settings::values.test_fast_astc_decoder.GetValue()) +
+                                   "|" +
+                                   flag("ByteRB", Settings::values.test_exact_byte_readback.GetValue()) +
+                                   "|" +
+                                   flag("CrashSkip",
+                                        Settings::values.test_precache_crash_skip.GetValue()) +
+                                   "|" + flag("MipCap", Settings::values.test_4k_mip_cap.GetValue()) +
+                                   "|" +
+                                   flag("VramGC4G", Settings::values.test_vram_gc_4gb.GetValue()) +
+                                   "|" +
+                                   flag("Tidy1s", Settings::values.test_tex_tidy_1s.GetValue());
+                               Common::BenchRecorder::Instance().Start(
+                                   30.0, tag,
+                                   Common::FS::GetEdenPath(Common::FS::EdenPath::UserDir) /
+                                       "benchmarks");
+                               bench_timer->start();
+                               update_overlay_btn();
+                           });
+        }
 
         menu.addSeparator();
 

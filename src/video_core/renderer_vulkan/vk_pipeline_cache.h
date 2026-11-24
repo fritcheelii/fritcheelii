@@ -247,6 +247,7 @@ private:
     struct PrecacheJob {
         u64 graphics_hash{}; ///< The cached graphics pipeline it builds, 0 for a compute program
         Common::UniqueFunction<bool> build;
+        u64 crash_id{}; ///< Optional stable ID for Crash-Skip journal (compute/recipe)
     };
 
     /// Shader precache before the game starts (precache_shaders), on every CPU thread: the cached
