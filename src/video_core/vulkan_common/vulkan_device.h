@@ -99,6 +99,7 @@ VK_DEFINE_HANDLE(VmaPool)
     EXTENSION(EXT, DEPTH_RANGE_UNRESTRICTED, depth_range_unrestricted)                             \
     EXTENSION(EXT, HDR_METADATA, hdr_metadata)                                                     \
     EXTENSION(EXT, MEMORY_BUDGET, memory_budget)                                                   \
+    EXTENSION(EXT, MEMORY_PRIORITY, memory_priority)                                               \
     EXTENSION(EXT, ROBUSTNESS_2, robustness_2)                                                     \
     EXTENSION(EXT, SAMPLER_FILTER_MINMAX, sampler_filter_minmax)                                   \
     EXTENSION(EXT, SHADER_STENCIL_EXPORT, shader_stencil_export)                                   \
@@ -1161,6 +1162,10 @@ FN_MAX_LIMIT_LIST
 
     bool CanReportMemoryUsage() const {
         return extensions.memory_budget;
+    }
+
+    bool IsExtMemoryPrioritySupported() const {
+        return extensions.memory_priority;
     }
 
     /// Device memory in use, reused for 50 ms (QueryDeviceMemoryUsage asks the driver).

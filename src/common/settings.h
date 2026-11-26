@@ -429,7 +429,7 @@ struct Values {
     SwitchableSetting<bool> nvidia_dlss{linkage, false, "nvidia_dlss", Category::Renderer};
     // AMD FSR 4 (FidelityFX SDK 2.4 on Vulkan) in place of a game's DLSS where AMD's runtime
     // offers it for the GPU; the built-in FSR 3.1 otherwise.
-    SwitchableSetting<bool> amd_fsr4{linkage, true, "amd_fsr4", Category::Renderer};
+    SwitchableSetting<bool> amd_fsr4{linkage, false, "amd_fsr4", Category::Renderer};
     SwitchableSetting<AspectRatio, true> aspect_ratio{linkage,
                                                       AspectRatio::R16_9,
                                                       "aspect_ratio",
@@ -439,7 +439,7 @@ struct Values {
                                                       true};
 
     SwitchableSetting<AntiAliasing> anti_aliasing{linkage,
-                                                  AntiAliasing::Smaa,
+                                                  AntiAliasing::None,
                                                   "anti_aliasing",
                                                   Category::Renderer,
                                                   Specialization::Default,
@@ -451,27 +451,34 @@ struct Values {
                                                          "oot_anti_aliasing", Category::Renderer};
     // Ocarina of Time: the game renders its 3D scene at a fixed fraction of its own size (its
     // dynamic resolution path, patched at load) and FSR upscales it. Native leaves it alone.
-    SwitchableSetting<OotFsrPreset> oot_fsr_preset{linkage, OotFsrPreset::Balanced, "oot_fsr_preset",
-                                                   Category::Renderer};
-    Setting<bool> test_4k_mip_cap{linkage, false, "test_4k_mip_cap", Category::Miscellaneous};
-    Setting<bool> test_shadow_size_steps{linkage, false, "test_shadow_size_steps",
+    SwitchableSetting<OotFsrPreset> oot_fsr_preset{linkage, OotFsrPreset::Performance,
+                                                   "oot_fsr_preset", Category::Renderer};
+    Setting<bool> test_4k_mip_cap{linkage, true, "test_4k_mip_cap", Category::Miscellaneous};
+    Setting<bool> test_shadow_size_steps{linkage, true, "test_shadow_size_steps",
                                          Category::Miscellaneous};
     Setting<bool> test_poll_backoff{linkage, true, "test_poll_backoff", Category::Miscellaneous};
     Setting<bool> test_changebank_hold{linkage, true, "test_changebank_hold",
                                        Category::Miscellaneous};
-    Setting<bool> test_occlusion_off{linkage, false, "test_occlusion_off",
+    Setting<bool> test_occlusion_off{linkage, true, "test_occlusion_off",
                                      Category::Miscellaneous};
-    Setting<bool> test_tex_tidy_1s{linkage, false, "test_tex_tidy_1s", Category::Miscellaneous};
-    Setting<bool> test_jit_block_warmup{linkage, false, "test_jit_block_warmup",
+    Setting<bool> test_tex_tidy_1s{linkage, true, "test_tex_tidy_1s", Category::Miscellaneous};
+    Setting<bool> test_jit_block_warmup{linkage, true, "test_jit_block_warmup",
                                         Category::Miscellaneous};
-    Setting<bool> test_host_zstd{linkage, false, "test_host_zstd", Category::Miscellaneous};
-    Setting<bool> test_vram_gc_4gb{linkage, false, "test_vram_gc_4gb", Category::Miscellaneous};
-    Setting<bool> test_fast_astc_decoder{linkage, false, "test_fast_astc_decoder",
+    Setting<bool> test_host_zstd{linkage, true, "test_host_zstd", Category::Miscellaneous};
+    Setting<bool> test_vram_gc_4gb{linkage, true, "test_vram_gc_4gb", Category::Miscellaneous};
+    Setting<bool> test_fast_astc_decoder{linkage, true, "test_fast_astc_decoder",
                                            Category::Miscellaneous};
-    Setting<bool> test_exact_byte_readback{linkage, false, "test_exact_byte_readback",
+    Setting<bool> test_exact_byte_readback{linkage, true, "test_exact_byte_readback",
                                              Category::Miscellaneous};
-    Setting<bool> test_precache_crash_skip{linkage, false, "test_precache_crash_skip",
+    Setting<bool> test_precache_crash_skip{linkage, true, "test_precache_crash_skip",
                                              Category::Miscellaneous};
+    Setting<bool> test_ubo_miss_bypass{linkage, false, "test_ubo_miss_bypass",
+                                         Category::Miscellaneous};
+    Setting<bool> test_ubo_16k_stream{linkage, false, "test_ubo_16k_stream",
+                                        Category::Miscellaneous};
+    Setting<bool> test_vram_memory_priority{linkage, false, "test_vram_memory_priority",
+                                             Category::Miscellaneous};
+    Setting<bool> oot_addon_warned{linkage, false, "oot_addon_warned", Category::Miscellaneous};
     // 0 = Switch (Default), 1 = Xbox, 2 = PlayStation, 3 = PC, 4 = Steam Deck
     Setting<int> oot_button_icons{linkage, 0, "oot_button_icons", Category::Miscellaneous};
     // Ocarina of Time docked: FSR writes 4K (the default), or 1440p, the game's own docked image,

@@ -224,6 +224,9 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
     std::map<u32, QWidget*> hold_graphics;
     std::vector<QWidget*> hold_api;
     QCheckBox* frame_gen_checkbox = nullptr;
+    QCheckBox* amd_fsr4_cb = nullptr;
+    QCheckBox* nvidia_dlss_cb = nullptr;
+    QCheckBox* game_dlss_cb = nullptr;
 
     for (const auto setting : Settings::values.linkage.by_category[Settings::Category::Renderer]) {
 #ifndef HAS_RESHADE
@@ -352,6 +355,7 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
 #endif
 #ifdef EGLANTINE_STREAMLINE
         } else if (setting->Id() == Settings::values.nvidia_dlss.Id()) {
+            nvidia_dlss_cb = widget->checkbox;
             // NVIDIA's files and a download button under the checkbox.
             QWidget* group = new QWidget(this);
             QVBoxLayout* group_layout = new QVBoxLayout(group);
@@ -364,6 +368,12 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
             connect(widget->checkbox, &QCheckBox::toggled, panel, &QWidget::setVisible);
             hold_graphics.emplace(setting->Id(), group);
 #endif
+        } else if (setting->Id() == Settings::values.amd_fsr4.Id()) {
+            amd_fsr4_cb = widget->checkbox;
+            hold_graphics.emplace(setting->Id(), widget);
+        } else if (setting->Id() == Settings::values.game_dlss_network.Id()) {
+            game_dlss_cb = widget->checkbox;
+            hold_graphics.emplace(setting->Id(), widget);
         } else if (setting->Id() == Settings::values.frame_gen.Id()) {
             frame_gen_checkbox = widget->checkbox;
             hold_graphics.emplace(setting->Id(), widget);
@@ -372,13 +382,37 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
         }
     }
 
-    // AMD FSR and frame generation in one box at the top (also in each game's settings), instead
-    // of spread through the list.
-    const std::array fsr_fg_ids{
-        Settings::values.amd_fsr4.Id(),
+    // 1) Top box: Ocarina of Time 3D Render Scale & Quality (works on all GPUs, zero extra VRAM)
+    const std::array oot_scale_ids{
         Settings::values.oot_fsr_preset.Id(),
         Settings::values.oot_docked_output.Id(),
         Settings::values.oot_anti_aliasing.Id(),
+    };
+    QGroupBox* oot_scale_box = nullptr;
+    for (const u32 id : oot_scale_ids) {
+        const auto it = hold_graphics.find(id);
+        if (it == hold_graphics.end()) {
+            continue;
+        }
+        if (oot_scale_box == nullptr) {
+            oot_scale_box = new QGroupBox(tr("Ocarina of Time — 3D Render Scale && Quality"), this);
+            auto* box_layout = new QVBoxLayout(oot_scale_box);
+            auto* hint = new QLabel(
+                tr("Adjusts internal 3D resolution on ALL GPUs (NVIDIA, AMD, Intel) with zero "
+                   "extra VRAM cost — works even with FSR 4 and DLSS OFF. Requires game restart."),
+                oot_scale_box);
+            hint->setWordWrap(true);
+            box_layout->addWidget(hint);
+            graphics_layout.addWidget(oot_scale_box);
+        }
+        oot_scale_box->layout()->addWidget(it->second);
+    }
+
+    // 2) Bottom box: Optional temporal upscaling (FSR 4 / DLSS) & Frame Generation
+    const std::array upscale_fg_ids{
+        Settings::values.amd_fsr4.Id(),
+        Settings::values.nvidia_dlss.Id(),
+        Settings::values.game_dlss_network.Id(),
         Settings::values.frame_gen.Id(),
         Settings::values.frame_gen_type.Id(),
         Settings::values.amd_frame_gen_version.Id(),
@@ -388,30 +422,97 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
         Settings::values.frame_gen_flow_scale.Id(),
         Settings::values.frame_gen_queue_target.Id(),
     };
-    QGroupBox* fsr_fg_box = nullptr;
-    for (const u32 id : fsr_fg_ids) {
+
+    for (const auto& [id, widget] : hold_graphics) {
+        if (std::ranges::find(oot_scale_ids, id) == oot_scale_ids.end() &&
+            std::ranges::find(upscale_fg_ids, id) == upscale_fg_ids.end()) {
+            graphics_layout.addWidget(widget);
+        }
+    }
+
+    QGroupBox* upscale_fg_box = nullptr;
+    for (const u32 id : upscale_fg_ids) {
         const auto it = hold_graphics.find(id);
         if (it == hold_graphics.end()) {
             continue;
         }
-        if (fsr_fg_box == nullptr) {
-            fsr_fg_box = new QGroupBox(tr("AMD FSR && Frame Generation"), this);
-            auto* box_layout = new QVBoxLayout(fsr_fg_box);
+        if (upscale_fg_box == nullptr) {
+            upscale_fg_box =
+                new QGroupBox(tr("Advanced Upscaling (FSR 4 / DLSS) && Frame Generation"), this);
+            auto* box_layout = new QVBoxLayout(upscale_fg_box);
             auto* hint = new QLabel(
-                tr("Ocarina of Time: FSR upscales the 3D scene (requires Resolution 1X and game restart)."),
-                fsr_fg_box);
+                tr("Optional temporal upscalers & frame generation (require Resolution 1X and "
+                   "use extra VRAM/GPU). Keep OFF on 4 GB / GTX cards; recommended for 8 GB+ "
+                   "RTX or Radeon RX 6000/7000/9000 GPUs."),
+                upscale_fg_box);
             hint->setWordWrap(true);
             box_layout->addWidget(hint);
-            graphics_layout.addWidget(fsr_fg_box);
+            graphics_layout.addWidget(upscale_fg_box);
         }
-        fsr_fg_box->layout()->addWidget(it->second);
+        upscale_fg_box->layout()->addWidget(it->second);
     }
 
-    for (const auto& [id, widget] : hold_graphics) {
-        if (std::ranges::find(fsr_fg_ids, id) == fsr_fg_ids.end()) {
-            graphics_layout.addWidget(widget);
+    // Mutual exclusion + auto-hide between FSR 4, NVIDIA DLSS, and Game DLSS:
+    // when one is active, hide the other two so only the active upscaler is shown;
+    // when all are OFF, show all available options.
+    auto find_w = [&](u32 id) -> QWidget* {
+        const auto it = hold_graphics.find(id);
+        return it != hold_graphics.end() ? it->second : nullptr;
+    };
+    QWidget* amd_fsr4_w = find_w(Settings::values.amd_fsr4.Id());
+    QWidget* nvidia_dlss_w = find_w(Settings::values.nvidia_dlss.Id());
+    QWidget* game_dlss_w = find_w(Settings::values.game_dlss_network.Id());
+    auto syncing_upscalers = std::make_shared<bool>(false);
+    auto sync_upscalers = [amd_fsr4_cb, nvidia_dlss_cb, game_dlss_cb, amd_fsr4_w, nvidia_dlss_w,
+                           game_dlss_w, syncing_upscalers](QCheckBox* changed) {
+        if (*syncing_upscalers) {
+            return;
+        }
+        *syncing_upscalers = true;
+        QCheckBox* active = (changed && changed->isChecked()) ? changed
+                            : (amd_fsr4_cb && amd_fsr4_cb->isChecked())     ? amd_fsr4_cb
+                            : (nvidia_dlss_cb && nvidia_dlss_cb->isChecked()) ? nvidia_dlss_cb
+                            : (game_dlss_cb && game_dlss_cb->isChecked())     ? game_dlss_cb
+                                                                              : nullptr;
+        if (active != nullptr) {
+            if (amd_fsr4_cb && amd_fsr4_cb != active && amd_fsr4_cb->isChecked()) {
+                amd_fsr4_cb->setChecked(false);
+            }
+            if (nvidia_dlss_cb && nvidia_dlss_cb != active && nvidia_dlss_cb->isChecked()) {
+                nvidia_dlss_cb->setChecked(false);
+            }
+            if (game_dlss_cb && game_dlss_cb != active && game_dlss_cb->isChecked()) {
+                game_dlss_cb->setChecked(false);
+            }
+            if (amd_fsr4_w) {
+                amd_fsr4_w->setVisible(active == amd_fsr4_cb);
+            }
+            if (nvidia_dlss_w) {
+                nvidia_dlss_w->setVisible(active == nvidia_dlss_cb);
+            }
+            if (game_dlss_w) {
+                game_dlss_w->setVisible(active == game_dlss_cb);
+            }
+        } else {
+            if (amd_fsr4_w) {
+                amd_fsr4_w->setVisible(true);
+            }
+            if (nvidia_dlss_w) {
+                nvidia_dlss_w->setVisible(true);
+            }
+            if (game_dlss_w) {
+                game_dlss_w->setVisible(true);
+            }
+        }
+        *syncing_upscalers = false;
+    };
+    for (QCheckBox* cb : {amd_fsr4_cb, nvidia_dlss_cb, game_dlss_cb}) {
+        if (cb != nullptr) {
+            connect(cb, &QCheckBox::toggled, this,
+                    [sync_upscalers, cb](bool) { sync_upscalers(cb); });
         }
     }
+    sync_upscalers(nullptr);
 
     // Hide rather than disable, a disabled widget would read as using the global value
     if (frame_gen_checkbox != nullptr) {

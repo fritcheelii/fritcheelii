@@ -31,6 +31,7 @@
 #include "common/literals.h"
 #include "common/logging.h"
 #include "common/memory_detect.h"
+#include "common/settings.h"
 #include <ranges>
 #include "video_core/vulkan_common/unbacked_fallback.h"
 #include "video_core/vulkan_common/vma.h"
@@ -242,6 +243,17 @@ vk::Image MemoryAllocator::TryCreateImage(const VkImageCreateInfo &ci, bool dedi
 
 VkResult MemoryAllocator::AllocateImage(const VkImageCreateInfo &ci, bool dedicated, bool may_fail,
                                         vk::Image &image) const {
+    float priority = 0.5f;
+    if (device.IsExtMemoryPrioritySupported() &&
+        Settings::values.test_vram_memory_priority.GetValue()) {
+        constexpr VkImageUsageFlags TargetUsage =
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        if ((ci.usage & TargetUsage) != 0) {
+            priority = 1.0f;
+        } else if ((ci.usage & VK_IMAGE_USAGE_SAMPLED_BIT) != 0) {
+            priority = 0.25f;
+        }
+    }
     const VmaAllocationCreateInfo alloc_ci = {
             // Best fit: images freed by the thousand leave holes in the blocks, which new ones
             // should fill before VMA takes another block.
@@ -255,7 +267,7 @@ VkResult MemoryAllocator::AllocateImage(const VkImageCreateInfo &ci, bool dedica
             .memoryTypeBits = 0,
             .pool = VK_NULL_HANDLE,
             .pUserData = nullptr,
-            .priority = 0.f,
+            .priority = priority,
     };
 
     VkImage handle{};

@@ -79,13 +79,13 @@ BufferCache<P>::~BufferCache() {
 }
 
 template <class P>
-void BufferCache<P>::RunGarbageCollector(bool aggressive_gc) {
+void BufferCache<P>::RunGarbageCollector(bool aggressive_gc, u64 idle_frames) {
     const StutterTrace::SiteScope site{StutterTrace::Site::BufferCollect};
     in_garbage_collector = true;
     SCOPE_EXIT {
         in_garbage_collector = false;
     };
-    const u64 ticks_to_destroy = aggressive_gc ? 60 : 120;
+    const u64 ticks_to_destroy = idle_frames != 0 ? idle_frames : aggressive_gc ? 60 : 120;
     int num_iterations = aggressive_gc ? 64 : 32;
     // Their GPU-written data is downloaded first, all with one wait for the GPU: one wait per
     // buffer stalled the GPU thread every frame on title 1 (an 8 GB GPU near its budget, no
@@ -205,7 +205,11 @@ void BufferCache<P>::TickFrame() {
     AdvanceUniformCacheHistory(channel_state->uniform_cache_shots);
 
     const bool skip_preferred = hits * 256 < shots * 251;
-    channel_state->uniform_buffer_skip_cache_size = skip_preferred ? DEFAULT_SKIP_CACHE_SIZE : 0;
+    channel_state->uniform_buffer_skip_cache_size =
+        skip_preferred ? ((!IS_OPENGL && Settings::values.test_ubo_16k_stream.GetValue())
+                              ? static_cast<u32>(16_KiB)
+                              : DEFAULT_SKIP_CACHE_SIZE)
+                       : 0;
 
     // If we can obtain the memory info, use it instead of the estimate.
     if (runtime.CanReportMemoryUsage()) {
@@ -241,7 +245,12 @@ void BufferCache<P>::TickFrame() {
             });
             if (idle_bytes >= 256_MiB) {
                 RunGarbageCollector(idle_bytes >= 768_MiB);
+            } else {
+                // Below 512 MiB idle threshold, still reclaim buffers unused for 1+ minute (3600 frames).
+                RunGarbageCollector(false, 3600);
             }
+        } else {
+            RunGarbageCollector(false, 3600);
         }
     } else if (total_used_memory >= minimum_memory) {
         RunGarbageCollector(total_used_memory >= critical_memory);

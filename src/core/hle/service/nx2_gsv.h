@@ -24,6 +24,9 @@
 #include <mutex>
 #include <utility>
 #include <vector>
+#if defined(_M_X64) || defined(__x86_64__)
+#include <immintrin.h>
+#endif
 
 #include "common/alignment.h"
 #include "common/display_hdr.h"
@@ -2138,15 +2141,25 @@ private:
             m_frame_trace.deadline_reset = pacing.reset;
         }
         if (now < pacing.deadline) {
-            // Sleep this service thread in the guest kernel. It runs on guest core 3, and a host
-            // sleep held that core for the whole wait: game threads scheduled there ran only
-            // between presents (Fortune's Weave's loader read one RomFS block per frame).
+            // Hybrid Pacer (RTSS-style): sleep the coarse remainder in the guest kernel (keeping
+            // guest core 3 free for loaders) and wake 1.5 ms early to spin-wait for exact pacing.
+            constexpr auto SpinReserve = std::chrono::microseconds{1500};
             const auto wait =
                 std::chrono::duration_cast<std::chrono::nanoseconds>(pacing.deadline - now);
             const auto sleep_start = trace ? std::chrono::steady_clock::now()
                                            : std::chrono::steady_clock::time_point{};
-            static_cast<void>(Kernel::GetCurrentThread(kernel).Sleep(
-                kernel, kernel.HardwareTimer().GetTick() + wait.count() + 2));
+            if (wait > SpinReserve) {
+                const auto coarse_wait = wait - SpinReserve;
+                static_cast<void>(Kernel::GetCurrentThread(kernel).Sleep(
+                    kernel, kernel.HardwareTimer().GetTick() + coarse_wait.count()));
+            }
+            while (std::chrono::steady_clock::now() < pacing.deadline) {
+#if defined(_M_X64) || defined(__x86_64__)
+                _mm_pause();
+#else
+                std::this_thread::yield();
+#endif
+            }
             if (trace) {
                 m_frame_trace.sleep_requested_ms =
                     std::chrono::duration<double, std::milli>(wait).count();

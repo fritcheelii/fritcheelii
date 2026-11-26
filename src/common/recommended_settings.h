@@ -107,7 +107,7 @@ void ForEachRecommendedSetting(Values& config, const HostProfile& host, Func&& f
     entry(config.vsync_mode, VSyncMode::Mailbox);
     entry(config.async_presentation, true);
     entry(config.scaling_filter, ScalingFilter::Fsr);
-    entry(config.anti_aliasing, AntiAliasing::Smaa);
+    entry(config.anti_aliasing, medium_card ? AntiAliasing::Smaa : AntiAliasing::None);
     entry(config.fsr_sharpening_slider, 140);
     entry(config.post_shader_enabled, false);
     entry(config.oot_anti_aliasing, OotAntiAliasing::NoSharpening);
@@ -125,13 +125,13 @@ void ForEachRecommendedSetting(Values& config, const HostProfile& host, Func&& f
     entry(config.frame_gen_type,
           host.windows && host.amd ? FrameGenType::AmdFsr : config.frame_gen_type.GetValue(true));
     // 3 real-world FPS-oriented tiers:
-    //  - Entry (<7 GB VRAM, e.g. GTX 1650 4 GB): Balanced (59%) + 1440p docked
+    //  - Entry (<7 GB VRAM, e.g. GTX 1650 4 GB): Performance (50%) + 1440p docked + AA Off
     //  - Mid   (8-10 GB VRAM, e.g. RTX 3060/4060, RX 6600/7600): Quality (67%) + 1440p docked
     //  - High  (12 GB+ VRAM): Native (100% game scale) on 12 GB, Native AA + 4K docked on 16 GB+
     entry(config.oot_fsr_preset, ultra_card    ? OotFsrPreset::NativeAa
                                  : large_card  ? OotFsrPreset::Native
                                  : medium_card ? OotFsrPreset::Quality
-                                               : OotFsrPreset::Balanced);
+                                               : OotFsrPreset::Performance);
     // Docked output: 4K only on 16 GB+ cards so 12 GB cards keep high FPS at 1440p.
     entry(config.oot_docked_output,
           ultra_card ? OotDockedOutput::Output4k : OotDockedOutput::Output1440p);

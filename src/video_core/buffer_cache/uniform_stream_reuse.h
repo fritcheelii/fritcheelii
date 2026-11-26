@@ -12,6 +12,7 @@
 #include <type_traits>
 
 #include "common/common_types.h"
+#include "common/settings.h"
 
 namespace VideoCommon {
 
@@ -54,7 +55,7 @@ inline void ReadUniformStreamReuseSwitch() {
 template <class Ref>
 class UniformStreamReuse {
 public:
-    static constexpr u32 MaxBytes = 4096; // BufferCache's DEFAULT_SKIP_CACHE_SIZE
+    static constexpr u32 MaxBytes = 16384; // Up to 16 KiB when test_ubo_16k_stream is enabled
     static constexpr size_t NumStages = 5;
     static constexpr size_t NumSlots = 18; // Maxwell constant buffers per stage
 
@@ -63,6 +64,8 @@ public:
         u64 tick{};
         u64 device_addr{}; ///< Where `bytes` were last read
         u32 size{};        // 0: nothing streamed yet
+        u8 miss_streak{};  ///< Consecutive misses for EXP115 bypass
+        u16 direct_left{}; ///< Remaining direct-stream binds without reuse compare
         std::array<u8, MaxBytes> bytes{};
     };
 
@@ -71,6 +74,8 @@ public:
             for (Slot& slot : stage) {
                 slot.size = 0;
                 slot.tick = 0;
+                slot.miss_streak = 0;
+                slot.direct_left = 0;
             }
         }
     }
@@ -104,12 +109,23 @@ template <class Runtime, class DeviceMemory>
                                            size_t stage, u32 index, u32 binding_index,
                                            u64 device_addr, u32 size) {
     using Reuse = UniformStreamReuse<typename Runtime::StreamUniformRef>;
-    if (size == 0 || size > Reuse::MaxBytes || stage >= Reuse::NumStages ||
+    const u32 max_bytes = Settings::values.test_ubo_16k_stream.GetValue() ? 16384U : 4096U;
+    if (size == 0 || size > max_bytes || stage >= Reuse::NumStages ||
         index >= Reuse::NumSlots) {
         return false;
     }
     Reuse& reuse = UniformStreamReuseState<typename Runtime::StreamUniformRef>();
     typename Reuse::Slot& slot = reuse.slots[stage][index];
+    const bool miss_bypass = Settings::values.test_ubo_miss_bypass.GetValue();
+    if (miss_bypass && slot.direct_left > 0) {
+        --slot.direct_left;
+        slot.size = 0;
+        slot.tick = 0;
+        slot.device_addr = device_addr;
+        const std::span<u8> span = runtime.BindMappedUniformBuffer(stage, binding_index, size);
+        device_memory.ReadBlockUnsafe(device_addr, span.data(), size);
+        return true;
+    }
     // Guest memory in one piece of host memory (most of these buffers lie within a page) is
     // compared where it is; other ranges are gathered into scratch first.
     const u8* guest = nullptr;
@@ -123,9 +139,22 @@ template <class Runtime, class DeviceMemory>
     const bool same_bytes = slot.size == size && std::memcmp(slot.bytes.data(), guest, size) == 0;
     slot.device_addr = device_addr;
     if (same_bytes && slot.tick == runtime.CurrentTick()) {
+        slot.miss_streak = 0;
         runtime.RebindStreamUniform(slot.ref, size);
         ++reuse.rebinds;
         return true;
+    }
+    if (miss_bypass) {
+        if (slot.miss_streak < 255) {
+            ++slot.miss_streak;
+        }
+        if (slot.miss_streak >= 8) {
+            slot.miss_streak = 0;
+            slot.direct_left = 64;
+        }
+    } else {
+        slot.miss_streak = 0;
+        slot.direct_left = 0;
     }
     if (!same_bytes) {
         // The slot takes the bytes first and the stream gets the slot's: the guest may write its
@@ -149,7 +178,8 @@ template <class Runtime>
 [[nodiscard]] bool RebindKeptUniform(Runtime& runtime, size_t stage, u32 index, u64 device_addr,
                                      u32 size) {
     using Reuse = UniformStreamReuse<typename Runtime::StreamUniformRef>;
-    if (size == 0 || size > Reuse::MaxBytes || stage >= Reuse::NumStages ||
+    const u32 max_bytes = Settings::values.test_ubo_16k_stream.GetValue() ? 16384U : 4096U;
+    if (size == 0 || size > max_bytes || stage >= Reuse::NumStages ||
         index >= Reuse::NumSlots) {
         return false;
     }
@@ -169,7 +199,8 @@ template <class Runtime, class DeviceMemory>
 [[nodiscard]] bool KeptUniformHolds(DeviceMemory& device_memory, size_t stage, u32 index,
                                     u64 device_addr, u32 size) {
     using Reuse = UniformStreamReuse<typename Runtime::StreamUniformRef>;
-    if (size == 0 || size > Reuse::MaxBytes || stage >= Reuse::NumStages ||
+    const u32 max_bytes = Settings::values.test_ubo_16k_stream.GetValue() ? 16384U : 4096U;
+    if (size == 0 || size > max_bytes || stage >= Reuse::NumStages ||
         index >= Reuse::NumSlots) {
         return false;
     }

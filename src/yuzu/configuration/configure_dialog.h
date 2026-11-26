@@ -98,6 +98,8 @@ private:
     std::unique_ptr<ConfigureGeneral> general_tab;
     std::unique_ptr<ConfigureGraphicsAdvanced> graphics_advanced_tab;
     std::unique_ptr<ConfigureGraphicsExtensions> graphics_extensions_tab;
+    std::unique_ptr<QWidget> graphics_extra_plus_tab;
+    std::function<void()> apply_graphics_extra_plus;
     std::unique_ptr<QWidget> graphics_test_tab;
     std::function<void()> apply_graphics_test;
     std::unique_ptr<ConfigureUi> ui_tab;

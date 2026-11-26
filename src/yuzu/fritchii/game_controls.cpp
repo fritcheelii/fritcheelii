@@ -153,7 +153,7 @@ void GameControls::Tick() {
 
 void GameControls::Place(const QRect& area) {
     const QSize size = sizeHint();
-    move(area.left() + (area.width() - size.width()) / 2, area.top() + 14);
+    move(std::max(area.left() + 16, area.right() - size.width() - 16), area.top() + 14);
 }
 
 void GameControls::paintEvent(QPaintEvent*) {

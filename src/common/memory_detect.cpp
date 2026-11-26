@@ -124,10 +124,25 @@ ProcessMemoryUsage GetProcessMemoryUsage() {
 
 std::optional<u64> GetSystemCommitRoom() {
 #ifdef _WIN32
-    MEMORYSTATUSEX status{};
-    status.dwLength = sizeof(status);
-    if (GlobalMemoryStatusEx(&status)) {
-        return status.ullAvailPageFile;
+    using CommitQueryClock = std::chrono::steady_clock;
+    static std::atomic<CommitQueryClock::rep> cached_at{};
+    static std::atomic<u64> cached_room{};
+    static std::atomic<bool> cached_ok{false};
+    const auto now = CommitQueryClock::now().time_since_epoch().count();
+    const auto last = cached_at.load(std::memory_order_relaxed);
+    if (last == 0 || now - last >= CommitQueryClock::duration{std::chrono::seconds{1}}.count()) {
+        MEMORYSTATUSEX status{};
+        status.dwLength = sizeof(status);
+        if (GlobalMemoryStatusEx(&status)) {
+            cached_room.store(status.ullAvailPageFile, std::memory_order_relaxed);
+            cached_ok.store(true, std::memory_order_relaxed);
+        } else {
+            cached_ok.store(false, std::memory_order_relaxed);
+        }
+        cached_at.store(now, std::memory_order_relaxed);
+    }
+    if (cached_ok.load(std::memory_order_relaxed)) {
+        return cached_room.load(std::memory_order_relaxed);
     }
 #elif defined(__APPLE__)
     // macOS: memory it can hand out without swapping (free, inactive and purgeable pages). A

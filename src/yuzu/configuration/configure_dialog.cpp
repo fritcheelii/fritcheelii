@@ -8,6 +8,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFrame>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QScrollArea>
@@ -85,125 +86,130 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
     ui->tabWidget->addTab(graphics_advanced_tab.get(), tr("GraphicsAdvanced"));
     ui->tabWidget->addTab(graphics_extensions_tab.get(), tr("GraphicsExtra"));
 
-    // FritCheeLii Test Lab (clean, isolated A/B switches, off by default)
-    graphics_test_tab = std::make_unique<QWidget>(this);
-    graphics_test_tab->setAccessibleName(tr("Test"));
+    // FritCheeLii Extra+ (verified performance & 4 GB VRAM optimizations)
+    graphics_extra_plus_tab = std::make_unique<QWidget>(this);
+    graphics_extra_plus_tab->setAccessibleName(tr("Extra+"));
     {
-        auto* outer = new QVBoxLayout(graphics_test_tab.get());
+        auto* outer = new QVBoxLayout(graphics_extra_plus_tab.get());
         outer->setContentsMargins(0, 0, 0, 0);
-        auto* scroll = new QScrollArea(graphics_test_tab.get());
+        auto* scroll = new QScrollArea(graphics_extra_plus_tab.get());
         scroll->setWidgetResizable(true);
         scroll->setFrameShape(QFrame::NoFrame);
         auto* content = new QWidget(scroll);
         auto* v = new QVBoxLayout(content);
-        v->setSpacing(8);
+        v->setSpacing(10);
 
         auto* intro = new QLabel(
-            tr("Experimental performance switches for A/B testing (Fritchii v6.1/v6.2 ports).\n"
-               "All switches start OFF so they never interfere with standard settings. "
-               "Restart the game after toggling to measure VRAM & FPS impact."),
+            tr("Verified performance & stability optimizations (Fritchii v6.1/v6.2 + Longshot "
+               "v3.2.0).\n"
+               "Enabled by default for Entry / 4 GB VRAM PCs based on A/B benchmarks. "
+               "Restart the game after toggling to apply."),
             content);
         intro->setWordWrap(true);
         v->addWidget(intro);
 
-        auto add_switch = [&](const QString& title, const QString& desc, bool checked) {
-            auto* cb = new QCheckBox(title, content);
+        auto make_group = [&](const QString& title) {
+            auto* gb = new QGroupBox(title, content);
+            auto* gl = new QVBoxLayout(gb);
+            gl->setSpacing(6);
+            v->addWidget(gb);
+            return std::pair<QGroupBox*, QVBoxLayout*>{gb, gl};
+        };
+
+        auto add_switch = [](QWidget* parent_box, QVBoxLayout* box_layout, const QString& title,
+                             const QString& desc, bool checked) {
+            auto* cb = new QCheckBox(title, parent_box);
             cb->setChecked(checked);
-            auto* note = new QLabel(desc, content);
+            auto* note = new QLabel(desc, parent_box);
             note->setWordWrap(true);
             note->setContentsMargins(24, 0, 0, 4);
             note->setStyleSheet(QStringLiteral("color: #9a9aa8; font-size: 11px;"));
-            v->addWidget(cb);
-            v->addWidget(note);
+            box_layout->addWidget(cb);
+            box_layout->addWidget(note);
             return cb;
         };
 
+        auto [gb_vram, lay_vram] = make_group(tr("VRAM & Textures (4 GB GPUs)"));
         auto* cb_mip = add_switch(
-            tr("4K Texture Mip Cap (4 GB VRAM Saver)"),
+            gb_vram, lay_vram, tr("4K Texture Mip Cap (4 GB VRAM Saver)"),
             tr("Skips mip level 0 on large mipmapped textures to reduce VRAM bandwidth & pressure.\n"
                "Recommended for: 4 GB GPUs (e.g. GTX 1650, GTX 1050 Ti, RX 570) at 720p/1080p. "
                "Requires game restart."),
             Settings::values.test_4k_mip_cap.GetValue());
-
+        auto* cb_vram_gc = add_switch(
+            gb_vram, lay_vram, tr("4 GB VRAM Smart Texture GC (Fritchii v6.2 + NX2navi)"),
+            tr("Prevents hot-texture thrashing (12-frame floor), skips un-evictable ASTC textures "
+               "without wasting GC budget, and recycles dead render targets faster past 80% VRAM. "
+               "Recommended for 4 GB GPUs (e.g. GTX 1650)."),
+            Settings::values.test_vram_gc_4gb.GetValue());
+        auto* cb_tidy = add_switch(
+            gb_vram, lay_vram, tr("Texture Heap Tidy-Up Once a Second (Fritchii v6.2)"),
+            tr("Throttles OoT's texture heap compaction from every frame to once per second, "
+               "avoiding repeated texture re-uploads and VRAM churn on 4 GB GPUs. "
+               "Requires game restart."),
+            Settings::values.test_tex_tidy_1s.GetValue());
         auto* cb_shadow = add_switch(
-            tr("Shadow Size Steps (Built-in OoT Patch)"),
+            gb_vram, lay_vram, tr("Shadow Size Steps (Built-in OoT Patch)"),
             tr("Rounds OoT local shadow map sizes up to multiples of 64 px so the image pool "
                "reuses them instead of creating thousands of shadow textures while moving in "
                "Castle Town / Guard House. Requires game restart."),
             Settings::values.test_shadow_size_steps.GetValue());
 
-        auto* cb_poll = add_switch(
-            tr("Resource Poll Backoff (Built-in OoT Patch)"),
-            tr("Replaces OoT's busy-spin resource polling loop with a 500 us sleep (svc 0xF3), "
-               "freeing CPU core cycles on 4-core CPUs (e.g. i3-10105F). Requires game restart."),
-            Settings::values.test_poll_backoff.GetValue());
-
-        auto* cb_changebank = add_switch(
-            tr("Neighbour Map Preload Hold — 2s (Built-in OoT Patch)"),
-            tr("Holds OoT's preloaded neighbouring area for 2 seconds when walking or turning in "
-               "overlapping areas like Hyrule Market / Field (NX2Saria), avoiding repeated "
-               "cancelled background loads on 4-core CPUs. Requires game restart."),
-            Settings::values.test_changebank_hold.GetValue());
-
-        auto* cb_jit = add_switch(
-            tr("JIT Block List Warm-Up (Fritchii)"),
-            tr("Records compiled ARM64 blocks per game session and pre-warms them on idle cores "
-               "at next launch to reduce CPU micro-stutters in Hyrule Field & Castle Town Market. "
-               "Requires game restart."),
-            Settings::values.test_jit_block_warmup.GetValue());
-
-        auto* cb_occl = add_switch(
-            tr("Occlusion Off (Built-in OoT Patch)"),
-            tr("Disables OoT's GPU occlusion queries and conditional renders to skip GPU->CPU "
-               "readback stalls. Great A/B test in Castle Town Market. Requires game restart."),
-            Settings::values.test_occlusion_off.GetValue());
-
-        auto* cb_tidy = add_switch(
-            tr("Texture Heap Tidy-Up Once a Second (Fritchii v6.2)"),
-            tr("Throttles OoT's texture heap compaction from every frame to once per second, "
-               "avoiding repeated texture re-uploads and VRAM churn on 4 GB GPUs. "
-               "Requires game restart."),
-            Settings::values.test_tex_tidy_1s.GetValue());
-
-        auto* cb_zstd = add_switch(
-            tr("Native Host Zstd Unpacking (Fritchii v6.2)"),
-            tr("Intercepts OoT's Zstd decompression calls in the JIT and runs native host libzstd "
-               "for faster area loads and lower CPU load. Requires game restart."),
-            Settings::values.test_host_zstd.GetValue());
-
-        auto* cb_vram_gc = add_switch(
-            tr("4 GB VRAM Smart Texture GC (Fritchii v6.2 + NX2navi)"),
-            tr("Prevents hot-texture thrashing (12-frame floor), skips un-evictable ASTC textures "
-               "without wasting GC budget, and recycles dead render targets faster past 80% VRAM. "
-               "Recommended for 4 GB GPUs (e.g. GTX 1650)."),
-            Settings::values.test_vram_gc_4gb.GetValue());
-
+        auto [gb_gpu, lay_gpu] = make_group(tr("GPU, ASTC & Readback Anti-Stall"));
         auto* cb_fast_astc = add_switch(
-            tr("Fast ASTC GPU Decoder (Longshot LDS + Loop Hoisting)"),
+            gb_gpu, lay_gpu, tr("Fast ASTC GPU Decoder (Longshot LDS + Loop Hoisting)"),
             tr("Uses Longshot's optimized ASTC compute decoder (LDS scratchpad + loop hoisting, "
                "~5.3x faster on non-ASTC desktop GPUs like GTX 1650 / RTX / AMD / Intel). "
                "Requires game restart."),
             Settings::values.test_fast_astc_decoder.GetValue());
-
         auto* cb_byte_rb = add_switch(
-            tr("Exact Byte Readback — Culling Anti-Stall (Longshot #2366)"),
+            gb_gpu, lay_gpu, tr("Exact Byte Readback — Culling Anti-Stall (Longshot #2366)"),
             tr("Checks exact byte-level GPU-modified ranges in BufferCache::GetFlushArea instead "
                "of 4 KB page alignment to avoid false GPU->CPU stalls on double-buffered OoT "
                "culling tables."),
             Settings::values.test_exact_byte_readback.GetValue());
-
+        auto* cb_occl = add_switch(
+            gb_gpu, lay_gpu, tr("Occlusion Off (Built-in OoT Patch)"),
+            tr("Disables OoT's GPU occlusion queries and conditional renders to skip GPU->CPU "
+               "readback stalls. Requires game restart."),
+            Settings::values.test_occlusion_off.GetValue());
         auto* cb_crash_skip = add_switch(
-            tr("Shader Precache Crash-Skip Journal (Longshot #2323)"),
+            gb_gpu, lay_gpu, tr("Shader Precache Crash-Skip Journal (Longshot #2323)"),
             tr("Records in-flight shader hashes during precache so if a GPU driver hangs or "
                "crashes on a single shader, the next launch automatically skips only that shader."),
             Settings::values.test_precache_crash_skip.GetValue());
+
+        auto [gb_cpu, lay_cpu] = make_group(tr("CPU & Area Loading (4-Core Optimizations)"));
+        auto* cb_poll = add_switch(
+            gb_cpu, lay_cpu, tr("Resource Poll Backoff (Built-in OoT Patch)"),
+            tr("Replaces OoT's busy-spin resource polling loop with a 500 us sleep (svc 0xF3), "
+               "freeing CPU core cycles on 4-core CPUs (e.g. i3-10105F). Requires game restart."),
+            Settings::values.test_poll_backoff.GetValue());
+        auto* cb_changebank = add_switch(
+            gb_cpu, lay_cpu, tr("Neighbour Map Preload Hold — 2s (Built-in OoT Patch)"),
+            tr("Holds OoT's preloaded neighbouring area for 2 seconds when walking or turning in "
+               "overlapping areas like Hyrule Market / Field (NX2Saria), avoiding repeated "
+               "cancelled background loads on 4-core CPUs. Requires game restart."),
+            Settings::values.test_changebank_hold.GetValue());
+        auto* cb_jit = add_switch(
+            gb_cpu, lay_cpu, tr("JIT Block List Warm-Up (Fritchii)"),
+            tr("Records compiled ARM64 blocks per game session and pre-warms them on idle cores "
+               "at next launch to reduce CPU micro-stutters in Hyrule Field & Castle Town Market. "
+               "Requires game restart."),
+            Settings::values.test_jit_block_warmup.GetValue());
+        auto* cb_zstd = add_switch(
+            gb_cpu, lay_cpu, tr("Native Host Zstd Unpacking (Fritchii v6.2)"),
+            tr("Intercepts OoT's Zstd decompression calls in the JIT and runs native host libzstd "
+               "for faster area loads and lower CPU load. Requires game restart."),
+            Settings::values.test_host_zstd.GetValue());
 
         v->addStretch(1);
         scroll->setWidget(content);
         outer->addWidget(scroll);
 
-        apply_graphics_test = [cb_mip, cb_shadow, cb_poll, cb_changebank, cb_jit, cb_occl, cb_tidy,
-                               cb_zstd, cb_vram_gc, cb_fast_astc, cb_byte_rb, cb_crash_skip]() {
+        apply_graphics_extra_plus = [cb_mip, cb_shadow, cb_poll, cb_changebank, cb_jit, cb_occl,
+                                     cb_tidy, cb_zstd, cb_vram_gc, cb_fast_astc, cb_byte_rb,
+                                     cb_crash_skip]() {
             Settings::values.test_4k_mip_cap.SetValue(cb_mip->isChecked());
             Settings::values.test_shadow_size_steps.SetValue(cb_shadow->isChecked());
             Settings::values.test_poll_backoff.SetValue(cb_poll->isChecked());
@@ -216,6 +222,72 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
             Settings::values.test_fast_astc_decoder.SetValue(cb_fast_astc->isChecked());
             Settings::values.test_exact_byte_readback.SetValue(cb_byte_rb->isChecked());
             Settings::values.test_precache_crash_skip.SetValue(cb_crash_skip->isChecked());
+        };
+    }
+    ui->tabWidget->addTab(graphics_extra_plus_tab.get(), tr("Extra+"));
+
+    // FritCheeLii Test Lab (experimental A/B switches ported from Fritchii v6.5, OFF by default)
+    graphics_test_tab = std::make_unique<QWidget>(this);
+    graphics_test_tab->setAccessibleName(tr("Test"));
+    {
+        auto* outer = new QVBoxLayout(graphics_test_tab.get());
+        outer->setContentsMargins(0, 0, 0, 0);
+        auto* scroll = new QScrollArea(graphics_test_tab.get());
+        scroll->setWidgetResizable(true);
+        scroll->setFrameShape(QFrame::NoFrame);
+        auto* content = new QWidget(scroll);
+        auto* v = new QVBoxLayout(content);
+        v->setSpacing(8);
+
+        auto* info = new QLabel(
+            tr("FritCheeLii Test Lab — new A/B experimental switches (all start OFF).\n"
+               "Previously verified switches were promoted to Graphics > Extra+. "
+               "Use the 30s Benchmark Recorder to measure impact before promoting."),
+            content);
+        info->setWordWrap(true);
+        v->addWidget(info);
+
+        auto add_test_switch = [&](const QString& title, const QString& desc, bool checked) {
+            auto* cb = new QCheckBox(title, content);
+            cb->setChecked(checked);
+            auto* note = new QLabel(desc, content);
+            note->setWordWrap(true);
+            note->setContentsMargins(24, 0, 0, 4);
+            note->setStyleSheet(QStringLiteral("color: #9a9aa8; font-size: 11px;"));
+            v->addWidget(cb);
+            v->addWidget(note);
+            return cb;
+        };
+
+        auto* cb_ubo_miss = add_test_switch(
+            tr("UBO Reuse Miss-Streak Bypass (Fritchii v6.5 EXP115)"),
+            tr("After 8 consecutive misses on a per-draw uniform slot, streams directly for the "
+               "next 64 binds without memcmp or extra slot copies. Reduces CPU load on dynamic "
+               "matrices. Takes effect immediately."),
+            Settings::values.test_ubo_miss_bypass.GetValue());
+
+        auto* cb_ubo_16k = add_test_switch(
+            tr("16 KiB Bone Palette UBO Streaming (Fritchii v6.5 EXP116)"),
+            tr("Raises Vulkan uniform stream reuse cap from 4 KiB to 16 KiB so Ocarina of Time's "
+               "7–13 KiB skinned bone palettes reuse stream allocations instead of hitting cached "
+               "buffers. Requires game restart."),
+            Settings::values.test_ubo_16k_stream.GetValue());
+
+        auto* cb_mem_prio = add_test_switch(
+            tr("VRAM Memory Priority — Render Targets First (Longshot)"),
+            tr("Uses VK_EXT_memory_priority to assign high residency priority (1.0) to render "
+               "targets and low priority (0.25) to sampled textures so Windows keeps framebuffers "
+               "in fast VRAM under memory pressure. Requires game restart."),
+            Settings::values.test_vram_memory_priority.GetValue());
+
+        v->addStretch(1);
+        scroll->setWidget(content);
+        outer->addWidget(scroll);
+
+        apply_graphics_test = [cb_ubo_miss, cb_ubo_16k, cb_mem_prio]() {
+            Settings::values.test_ubo_miss_bypass.SetValue(cb_ubo_miss->isChecked());
+            Settings::values.test_ubo_16k_stream.SetValue(cb_ubo_16k->isChecked());
+            Settings::values.test_vram_memory_priority.SetValue(cb_mem_prio->isChecked());
         };
     }
     ui->tabWidget->addTab(graphics_test_tab.get(), tr("Test"));
@@ -301,6 +373,9 @@ void ConfigureDialog::ApplyConfiguration() {
     graphics_tab->ApplyConfiguration();
     graphics_advanced_tab->ApplyConfiguration();
     graphics_extensions_tab->ApplyConfiguration();
+    if (apply_graphics_extra_plus) {
+        apply_graphics_extra_plus();
+    }
     if (apply_graphics_test) {
         apply_graphics_test();
     }
@@ -351,7 +426,7 @@ void ConfigureDialog::PopulateSelectionList() {
          {tr("CPU"), {cpu_tab.get()}},
          {tr("Graphics"),
           {graphics_tab.get(), graphics_advanced_tab.get(), graphics_extensions_tab.get(),
-           graphics_test_tab.get()}},
+           graphics_extra_plus_tab.get(), graphics_test_tab.get()}},
          {tr("Audio"), {audio_tab.get()}},
          {tr("Controls"), input_tab->GetSubTabs()}},
     };

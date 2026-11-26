@@ -116,7 +116,7 @@ RecommendedSettingsDialog::PresetChoice RecommendedSettingsDialog::ChoosePreset(
     auto* combo = new QComboBox(&dlg);
     combo->addItems({
         tr("Auto — Recommended for This PC"),
-        tr("Entry / 4–6 GB VRAM (Max FPS — Handheld, Balanced FSR, BC3)"),
+        tr("Entry / 4–6 GB VRAM (Max FPS — Handheld, Performance 50% FSR, AA Off, BC3, All 12 Perf Fixes)"),
         tr("Mid-Range / 8 GB VRAM (Balanced — Quality FSR, BC3)"),
         tr("High-End / 12–16 GB+ VRAM (Best Visuals — Native/Quality, Uncompressed)"),
     });

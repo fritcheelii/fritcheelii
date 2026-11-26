@@ -180,27 +180,28 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
               "Options lower than 1X can cause artifacts."));
     INSERT(Settings, scaling_filter, tr("Window Adapting Filter:"),
            tr("Bilinear while HDR output is active."));
-    INSERT(Settings, game_dlss_network, tr("Use the game's own DLSS"),
-           tr("Uses the Switch 2 game's built-in upscaler instead of AMD FSR 3.1.\n"
-              "Keep OFF for best performance on GTX / AMD cards. Requires game restart."));
+    INSERT(Settings, game_dlss_network, tr("Use the game's own DLSS (Slow — Emulated)"),
+           tr("Emulates the Switch 2 game's heavy built-in DLSS neural network via compute shaders.\n"
+              "Keep OFF for much higher FPS and lower VRAM usage. Requires game restart."));
     INSERT(Settings, frame_rate_limit, tr("Frame rate limit (Switch 2):"),
            tr("Switch 2 VSync target (default 60 Hz). Requires game restart."));
     INSERT(Settings, fsr_sharpening_slider, tr("RCAS Sharpness:"),
            tr("Sharpening strength for AMD FSR upscaling (0% = off)."));
-    INSERT(Settings, amd_fsr4, tr("Use AMD FSR 4 in place of a game's DLSS"),
-           tr("Enables AMD FSR 4 upscaling on supported Radeon RX 6000/7000/9000 GPUs (Windows, 1X).\n"
-              "Keep OFF on 4 GB / GTX cards. Requires game restart."));
-    INSERT(Settings, nvidia_dlss, tr("Use NVIDIA DLSS in place of a game's DLSS (experimental)"),
-           tr("Uses NVIDIA DLSS on GeForce RTX cards instead of AMD FSR (1X, requires RTX GPU).\n"
-              "Keep OFF on GTX / AMD cards. Requires game restart."));
+    INSERT(Settings, amd_fsr4, tr("Use AMD FSR 4 / 3.1 Temporal Upscaler (8 GB+ / Radeon)"),
+           tr("Enables temporal FSR 4 (Radeon RX 6000/7000/9000) or FSR 3.1 fallback on Windows (1X).\n"
+              "Uses extra VRAM & GPU: keep OFF on 4 GB / GTX cards. Requires game restart."));
+    INSERT(Settings, nvidia_dlss, tr("Use NVIDIA DLSS (RTX GPUs Only, Experimental)"),
+           tr("Uses native PC NVIDIA DLSS via Tensor Cores (requires GeForce RTX + Streamline DLLs).\n"
+              "Does not work on GTX / AMD cards (keep OFF). Requires game restart."));
     INSERT(Settings, anti_aliasing, tr("Anti-Aliasing Method:"),
            tr("Post-process anti-aliasing. None is fastest; SMAA is sharpest; FXAA is light."));
     INSERT(Settings, oot_anti_aliasing, tr("Ocarina of Time anti-aliasing:"),
-           tr("No sharpening (Recommended): cleaner and faster.\n"
+           tr("No sharpening (Recommended): cleaner image and higher FPS.\n"
               "Game: uses the game's heavy sharpening pass. Requires game restart."));
-    INSERT(Settings, oot_fsr_preset, tr("Ocarina of Time FSR preset:"),
-           tr("3D render scale for Ocarina of Time (HUD stays sharp). Requires game restart.\n"
-              "Balanced (59%): best for 4 GB GPUs | Quality (67%): 8 GB | Native AA: 12 GB+."));
+    INSERT(Settings, oot_fsr_preset, tr("Ocarina of Time 3D Render Scale:"),
+           tr("Lowers 3D scene resolution (HUD stays sharp) with zero extra VRAM cost — works on all GPUs\n"
+              "even with FSR 4 and DLSS OFF. Performance (50%): best for 4 GB GPUs | Quality (67%): 8 GB |\n"
+              "Native AA: 12 GB+. Requires game restart."));
     INSERT(Settings, oot_docked_output, tr("Ocarina of Time docked output:"),
            tr("Docked mode only. 1440p (lighter): recommended for 4–8 GB GPUs.\n"
               "4K: sharpest, recommended only for 12 GB+ GPUs. Requires game restart."));
@@ -249,8 +250,8 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
            tr("Skips certain cache invalidations during memory updates, reducing CPU usage and "
               "improving latency. This may cause soft-crashes."));
     INSERT(Settings, fps_limit, tr("FPS Limit"),
-           tr("Caps how often the game presents, so the game itself runs at this rate. 0 leaves "
-              "the frame rate to the game and the display."));
+           tr("Caps FPS with Hybrid Pacer (RTSS-style). Leave at 0 if using RTSS or a driver cap "
+              "to avoid double-limiting."));
     INSERT(Settings, vsync_mode, tr("VSync Mode:"),
            tr("FIFO (VSync) does not drop frames or exhibit tearing but is limited by the screen "
               "refresh rate.\nFIFO Relaxed allows tearing as it recovers from a slow down.\n"

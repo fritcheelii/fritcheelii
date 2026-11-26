@@ -2548,6 +2548,46 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
         QtCommon::system->ApplySettings();
     }
 
+    if (title_id == 0x0400486024DEC000ULL && type == StartGameType::Normal &&
+        !Settings::values.oot_addon_warned.GetValue() &&
+        (Settings::values.astc_recompression.GetValue() != Settings::AstcRecompression::Uncompressed ||
+         Settings::values.oot_fsr_preset.GetValue() == Settings::OotFsrPreset::Balanced ||
+         Settings::values.oot_fsr_preset.GetValue() == Settings::OotFsrPreset::Performance ||
+         Settings::values.oot_fsr_preset.GetValue() == Settings::OotFsrPreset::UltraPerformance)) {
+        auto& disabled = Settings::values.disabled_addons[title_id];
+        const auto has_disabled = [&](const char* name) {
+            return std::ranges::any_of(disabled, [&](const std::string& s) {
+                return s.find(name) != std::string::npos;
+            });
+        };
+        const bool max_res_on = !has_disabled("Max Resolution");
+        const bool tex_pool_on = !has_disabled("Texture Pool x2");
+        if (max_res_on || tex_pool_on) {
+            Settings::values.oot_addon_warned.SetValue(true);
+            QMessageBox box(
+                QMessageBox::Warning, tr("Heavy Built-in Add-Ons Active"),
+                tr("Max Resolution or Texture Pool x2 is enabled alongside a light/entry graphics "
+                   "preset.\n\nOn GPUs in this tier (e.g. GTX 1650 / RX 580 or lower VRAM), these "
+                   "two patches can cause VRAM overflow, FPS drops, or unexpected closes.\n\n"
+                   "Disable them now for smoother performance?"),
+                QMessageBox::NoButton, this);
+            QPushButton* const disable_btn =
+                box.addButton(tr("Disable (Recommended)"), QMessageBox::AcceptRole);
+            box.setDefaultButton(disable_btn);
+            box.addButton(tr("Keep Enabled"), QMessageBox::RejectRole);
+            box.exec();
+            if (box.clickedButton() == disable_btn) {
+                if (max_res_on) {
+                    disabled.emplace_back("Max Resolution (built-in)");
+                }
+                if (tex_pool_on) {
+                    disabled.emplace_back("Texture Pool x2 (built-in)");
+                }
+            }
+            config->SaveAllValues();
+        }
+    }
+
     if (title_id == Settings::MarioKartWorldProgramId && !asked_recommended_mkw_settings) {
         asked_recommended_mkw_settings = true;
         use_recommended_mkw_settings =
@@ -4178,8 +4218,7 @@ void MainWindow::ShowFullscreen() {
         window->hide();
         window->setWindowFlags(window->windowFlags() | Qt::FramelessWindowHint);
         const auto screen_geometry = GuessCurrentScreen(window)->geometry();
-        window->setGeometry(screen_geometry.x(), screen_geometry.y(), screen_geometry.width(),
-                            screen_geometry.height() + 1);
+        window->setGeometry(screen_geometry);
         window->raise();
         window->showNormal();
     };
@@ -5007,6 +5046,19 @@ void MainWindow::OnApplyRecommendedSettings() {
         chosen.integrated = false;
     }
     const auto changes = Settings::ApplyRecommendedSettings(Settings::values, chosen);
+    const bool entry_4gb = chosen.integrated || chosen.vram_bytes < 7 * GiB;
+    Settings::values.test_4k_mip_cap.SetValue(entry_4gb);
+    Settings::values.test_vram_gc_4gb.SetValue(entry_4gb);
+    Settings::values.test_tex_tidy_1s.SetValue(entry_4gb);
+    Settings::values.test_shadow_size_steps.SetValue(true);
+    Settings::values.test_poll_backoff.SetValue(true);
+    Settings::values.test_changebank_hold.SetValue(true);
+    Settings::values.test_occlusion_off.SetValue(true);
+    Settings::values.test_jit_block_warmup.SetValue(true);
+    Settings::values.test_host_zstd.SetValue(true);
+    Settings::values.test_fast_astc_decoder.SetValue(true);
+    Settings::values.test_exact_byte_readback.SetValue(true);
+    Settings::values.test_precache_crash_skip.SetValue(true);
     LOG_INFO(Config, "Applied the recommended settings: {} changed", changes.size());
     Settings::UpdateGPUAccuracy();
     OnSaveConfig();
@@ -5021,9 +5073,10 @@ void MainWindow::OnRestorePreviousSettings() {
     const auto answer = QMessageBox::question(
         this, tr("Restore Default Settings"),
         tr("Restore FritCheeLii's optimized default settings?\n\n"
-           "This resets graphics & performance options to the default balanced profile "
-           "(Handheld, 1X, Balanced FSR, No sharpening, Low GPU accuracy, Conservative VRAM, "
-           "BC3 ASTC, Async Shaders) and turns off experimental Test switches."),
+           "This resets graphics & performance options to the default entry-friendly profile "
+           "(Handheld, 1X, Performance 50% FSR, AA Off, No sharpening, Low GPU accuracy, "
+           "Conservative VRAM, BC3 ASTC, Async Shaders) with all 12 verified performance "
+           "switches ON."),
         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (answer != QMessageBox::Yes) {
         return;
@@ -5039,15 +5092,18 @@ void MainWindow::OnRestorePreviousSettings() {
     const auto changes = Settings::ApplyRecommendedSettings(Settings::values, default_profile);
     Settings::values.use_docked_mode.SetValue(Settings::ConsoleMode::Handheld);
     Settings::values.oot_30fps.SetValue(false);
-    Settings::values.test_4k_mip_cap.SetValue(false);
-    Settings::values.test_shadow_size_steps.SetValue(false);
+    Settings::values.test_4k_mip_cap.SetValue(true);
+    Settings::values.test_shadow_size_steps.SetValue(true);
     Settings::values.test_poll_backoff.SetValue(true);
     Settings::values.test_changebank_hold.SetValue(true);
-    Settings::values.test_occlusion_off.SetValue(false);
-    Settings::values.test_tex_tidy_1s.SetValue(false);
-    Settings::values.test_jit_block_warmup.SetValue(false);
-    Settings::values.test_host_zstd.SetValue(false);
-    Settings::values.test_vram_gc_4gb.SetValue(false);
+    Settings::values.test_occlusion_off.SetValue(true);
+    Settings::values.test_tex_tidy_1s.SetValue(true);
+    Settings::values.test_jit_block_warmup.SetValue(true);
+    Settings::values.test_host_zstd.SetValue(true);
+    Settings::values.test_vram_gc_4gb.SetValue(true);
+    Settings::values.test_fast_astc_decoder.SetValue(true);
+    Settings::values.test_exact_byte_readback.SetValue(true);
+    Settings::values.test_precache_crash_skip.SetValue(true);
     LOG_INFO(Config, "Restored FritCheeLii default settings: {} changed", changes.size());
     Settings::UpdateGPUAccuracy();
     OnSaveConfig();

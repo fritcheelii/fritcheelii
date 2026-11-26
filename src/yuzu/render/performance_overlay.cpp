@@ -36,9 +36,9 @@
 #endif
 
 namespace {
-constexpr int FullHeight = 54;
-constexpr int CompactHeight = 42;
-constexpr int HeaderHeight = 20;
+constexpr int FullHeight = 44;
+constexpr int CompactHeight = 36;
+constexpr int HeaderHeight = 18;
 constexpr int Edge = 5;    // the gold edge on the left
 constexpr int Pad = 12;    // around the cells
 constexpr int Gap = 14;    // between cells, with a hairline in the middle
@@ -82,6 +82,46 @@ double QuerySystemCpuPercent() {
     }
     return std::clamp(100.0 * static_cast<double>(total_d - idle_d) / static_cast<double>(total_d),
                       0.0, 100.0);
+}
+
+double QueryCpuClockGhz() {
+    struct ProcPowerInfo {
+        ULONG Number;
+        ULONG MaxMhz;
+        ULONG CurrentMhz;
+        ULONG MhzLimit;
+        ULONG MaxIdleState;
+        ULONG CurrentIdleState;
+    };
+    using CallNtPowerInfoFn = LONG(WINAPI*)(int, PVOID, ULONG, PVOID, ULONG);
+    static CallNtPowerInfoFn call_nt_power = []() -> CallNtPowerInfoFn {
+        HMODULE mod = GetModuleHandleW(L"powrprof.dll");
+        if (!mod) {
+            mod = LoadLibraryW(L"powrprof.dll");
+        }
+        return mod ? reinterpret_cast<CallNtPowerInfoFn>(
+                         GetProcAddress(mod, "CallNtPowerInformation"))
+                   : nullptr;
+    }();
+    if (!call_nt_power) {
+        return 0.0;
+    }
+    SYSTEM_INFO sys_info{};
+    GetSystemInfo(&sys_info);
+    const DWORD count = std::clamp<DWORD>(sys_info.dwNumberOfProcessors, 1, 256);
+    std::vector<ProcPowerInfo> info(count);
+    if (call_nt_power(11 /* ProcessorInformation */, nullptr, 0, info.data(),
+                      static_cast<ULONG>(info.size() * sizeof(ProcPowerInfo))) != 0) {
+        return 0.0;
+    }
+    ULONG best_mhz = 0;
+    for (const auto& entry : info) {
+        const ULONG mhz = entry.CurrentMhz > 0 ? entry.CurrentMhz : entry.MaxMhz;
+        if (mhz > best_mhz) {
+            best_mhz = mhz;
+        }
+    }
+    return best_mhz > 0 ? static_cast<double>(best_mhz) / 1000.0 : 0.0;
 }
 
 int QueryMaxCpuCorePercent() {
@@ -647,7 +687,10 @@ void PerformanceOverlay::UpdateStats(const Core::PerfStatsResults& results,
     }
     m_cpu_max_core = QueryMaxCpuCorePercent();
     if (m_cpu_max_core >= 0) {
-        m_cpu_core_text = tr("Single Core %1%").arg(m_cpu_max_core);
+        const double cpu_ghz = QueryCpuClockGhz();
+        m_cpu_core_text = cpu_ghz > 0.1
+                              ? tr("Single Core %1% • %2 GHz").arg(m_cpu_max_core).arg(cpu_ghz, 0, 'f', 2)
+                              : tr("Single Core %1%").arg(m_cpu_max_core);
     } else {
         m_cpu_core_text.clear();
     }
@@ -764,9 +807,9 @@ void PerformanceOverlay::paintEvent(QPaintEvent*) {
                          QPointF{width() - 1.0, static_cast<qreal>(y0)});
     }
     // Two text rows, centred in the bar below the optional hardware header.
-    const int rows = value.height() + 3 + label.height();
+    const int rows = value.height() + 2 + label.height();
     const int row1 = y0 + (h - rows) / 2 + value.ascent();
-    const int row2 = y0 + (h - rows) / 2 + value.height() + 3 + label.ascent();
+    const int row2 = y0 + (h - rows) / 2 + value.height() + 2 + label.ascent();
 
     for (size_t index = 0; index < m_cells.size(); ++index) {
         const Cell& cell = m_cells[index];

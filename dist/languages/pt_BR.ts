@@ -1163,7 +1163,7 @@ Ao ativar, ignora esses avisos e encerra diretamente a emulação.</translation>
     <message>
         <location filename="../../src/qt_common/config/shared_translation.cpp" line="345" />
         <source>Hide mouse on inactivity</source>
-        <translation>Esconder rato quando inactivo.</translation>
+        <translation>Esconder cursor do mouse quando inativo.</translation>
     </message>
     <message>
         <location filename="../../src/qt_common/config/shared_translation.cpp" line="346" />
@@ -1290,7 +1290,7 @@ Ao ativar, ignora esses avisos e encerra diretamente a emulação.</translation>
     <message>
         <location filename="../../src/qt_common/config/shared_translation.cpp" line="419" />
         <source>Vulkan</source>
-        <translation>Vulcano</translation>
+        <translation>Vulkan</translation>
     </message>
     <message>
         <location filename="../../src/qt_common/config/shared_translation.cpp" line="421" />
@@ -2870,7 +2870,7 @@ Ao ativar, ignora esses avisos e encerra diretamente a emulação.</translation>
     <message>
         <location filename="../../src/yuzu/configuration/configure_dialog.cpp" line="73" />
         <source>Filesystem</source>
-        <translation>Sistema de Ficheiros</translation>
+        <translation>File System</translation>
     </message>
     <message>
         <location filename="../../src/yuzu/configuration/configure_dialog.cpp" line="74" />
@@ -2903,7 +2903,7 @@ Ao ativar, ignora esses avisos e encerra diretamente a emulação.</translation>
         <location filename="../../src/yuzu/configuration/configure_dialog.cpp" line="79" />
         <location filename="../../src/yuzu/configuration/configure_dialog.cpp" line="184" />
         <source>Controls</source>
-        <translation>Controlos</translation>
+        <translation>Controls</translation>
     </message>
     <message>
         <location filename="../../src/yuzu/configuration/configure_dialog.cpp" line="80" />
@@ -2942,7 +2942,7 @@ Ao ativar, ignora esses avisos e encerra diretamente a emulação.</translation>
     <message>
         <location filename="../../src/yuzu/configuration/configure_filesystem.ui" line="17" />
         <source>Filesystem</source>
-        <translation>Sistema de Ficheiros</translation>
+        <translation>File System</translation>
     </message>
     <message>
         <location filename="../../src/yuzu/configuration/configure_filesystem.ui" line="25" />
