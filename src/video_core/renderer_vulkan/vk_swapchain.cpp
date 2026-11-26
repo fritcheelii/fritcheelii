@@ -23,10 +23,42 @@
 #include "video_core/vulkan_common/vulkan_device.h"
 #include "video_core/vulkan_common/vulkan_wrapper.h"
 #include "vulkan/vulkan_core.h"
+#ifdef EGLANTINE_STREAMLINE
+#include "video_core/vulkan_common/streamline.h"
+#include "video_core/vulkan_common/streamline_frame_gen.h"
+#endif
 
 namespace Vulkan {
 
 namespace {
+
+bool FrameGenPresents([[maybe_unused]] VkFormat format) {
+#ifdef EGLANTINE_STREAMLINE
+    return Streamline::FrameGenActive() && Streamline::FrameGenSupportsSwapchain(format);
+#else
+    return false;
+#endif
+}
+
+bool FrameGenLoaded() {
+#ifdef EGLANTINE_STREAMLINE
+    return Streamline::FrameGenSession();
+#else
+    return false;
+#endif
+}
+
+#ifdef EGLANTINE_STREAMLINE
+void UnloadFrameGen(Scheduler& scheduler, const Device& device, std::string_view reason) {
+    std::scoped_lock lock{scheduler.submit_mutex};
+    const VkResult result = device.GetLogical().WaitIdle();
+    if (result == VK_ERROR_DEVICE_LOST) {
+        device.ReportLoss();
+    }
+    vk::Check(result);
+    Streamline::DisableFrameGen(reason);
+}
+#endif
 
 VkSurfaceFormatKHR ChooseSwapSurfaceFormat(vk::Span<VkSurfaceFormatKHR> formats,
                                          VkFormat requested_format,
@@ -468,7 +500,22 @@ void Swapchain::CreateSwapchain(const VkSurfaceCapabilitiesKHR& capabilities) {
     }
     if (!frame_gen_swapchain) {
         // Don't add code within this and the swapchain creation.
-        swapchain = device.GetLogical().CreateSwapchainKHR(swapchain_ci);
+        try {
+            swapchain = device.GetLogical().CreateSwapchainKHR(swapchain_ci);
+        } catch ([[maybe_unused]] const vk::Exception& exception) {
+            const VkResult result = exception.GetResult();
+            if (!FrameGenLoaded() || result == VK_ERROR_SURFACE_LOST_KHR ||
+                result == VK_ERROR_NATIVE_WINDOW_IN_USE_KHR) {
+                throw;
+            }
+#ifdef EGLANTINE_STREAMLINE
+            UnloadFrameGen(scheduler, device,
+                           fmt::format("Streamline's swapchain failed ({})", exception.what()));
+#endif
+            present_mode = ChooseSwapPresentMode(has_imm, has_mailbox, has_fifo_relaxed);
+            swapchain_ci.presentMode = present_mode;
+            swapchain = device.GetLogical().CreateSwapchainKHR(swapchain_ci);
+        }
     }
 
     extent = swapchain_ci.imageExtent;

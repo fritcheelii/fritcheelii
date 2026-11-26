@@ -433,14 +433,16 @@ u32 FrameGenMultiplier() {
 }
 
 size_t FrameGenGenerations() {
-    if (!values.frame_gen.GetValue() || FrameGenTypeInUse() == FrameGenType::AmdFsr) {
+    if (!values.frame_gen.GetValue() || FrameGenTypeInUse() == FrameGenType::AmdFsr ||
+        FrameGenTypeInUse() == FrameGenType::NvidiaDlssG) {
         return 0;
     }
     return FrameGenMultiplier() - 1;
 }
 
 size_t FrameGenMaxGenerations() {
-    if (!values.frame_gen.GetValue() || FrameGenTypeInUse() == FrameGenType::AmdFsr) {
+    if (!values.frame_gen.GetValue() || FrameGenTypeInUse() == FrameGenType::AmdFsr ||
+        FrameGenTypeInUse() == FrameGenType::NvidiaDlssG) {
         return 0;
     }
     if (values.frame_gen_target_rate.GetValue() != 0) {

@@ -11,11 +11,15 @@
 #include "common/fs/path_util.h"
 #include "common/logging.h"
 #include "common/settings.h"
+#include "video_core/frame_gen_choice.h"
 #include "video_core/renderer_vulkan/present/frame_gen.h"
 #include "video_core/renderer_vulkan/present/util.h"
 #include "video_core/renderer_vulkan/vk_present_manager.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/vulkan_common/vulkan_device.h"
+#ifdef EGLANTINE_STREAMLINE
+#include "video_core/vulkan_common/streamline.h"
+#endif
 
 namespace Vulkan {
 
@@ -204,18 +208,35 @@ void FrameGen::Process(const Device& device, Frame* frame, VkFormat format,
         shaders.emplace(device);
     }
 
+    const Settings::FrameGenType chosen = Settings::values.frame_gen_type.GetValue();
+    Settings::FrameGenType active_type = Settings::FrameGenTypeInUse();
+    if (chosen == Settings::FrameGenType::NvidiaDlssG) {
+#ifdef EGLANTINE_STREAMLINE
+        const VideoCore::DlssgBlock block = VideoCore::BlockedDlssg({
+            .streamline = true,
+            .dlss = Settings::values.nvidia_dlss.GetValue(),
+            .program_id = Settings::GetCurrentProgramID(),
+            .loaded = Streamline::FrameGenSession(),
+        });
+#else
+        const VideoCore::DlssgBlock block = VideoCore::DlssgBlock::NoStreamline;
+#endif
+        active_type = VideoCore::ActiveFrameGenType(chosen, block);
+    }
+
     if (unavailable || !Settings::values.frame_gen.GetValue() ||
-        Settings::FrameGenTypeInUse() == Settings::FrameGenType::AmdFsr) {
-        if (chain || fsr3_chain) {
+        active_type == Settings::FrameGenType::AmdFsr ||
+        active_type == Settings::FrameGenType::NvidiaDlssG) {
+        if (chain || optical_flow_chain) {
             scheduler.Finish();
             chain.reset();
-            fsr3_chain.reset();
+            optical_flow_chain.reset();
         }
         warm_streak = 0;
         return;
     }
 
-    if (!shaders->IsValid() && Settings::FrameGenTypeInUse() != Settings::FrameGenType::Fsr3) {
+    if (!shaders->IsValid() && active_type != Settings::FrameGenType::Fsr3) {
         unavailable = true;
         state.store(shaders->IsDeviceSupported() ? VideoCore::FrameGenState::MissingLosslessDll
                                                  : VideoCore::FrameGenState::UnsupportedGpu,
@@ -235,7 +256,7 @@ void FrameGen::Process(const Device& device, Frame* frame, VkFormat format,
 
     const VkExtent2D extent{.width = frame->width, .height = frame->height};
     const f32 flow_scale = ConfiguredFlowScale(peak_guest_extent, extent);
-    if ((!chain && !fsr3_chain) || built_extent.width != extent.width || built_extent.height != extent.height ||
+    if ((!chain && !optical_flow_chain) || built_extent.width != extent.width || built_extent.height != extent.height ||
         built_format != format || built_flow_scale != flow_scale) {
         Rebuild(device, extent, format, flow_scale);
     }
@@ -286,7 +307,7 @@ void FrameGen::Process(const Device& device, Frame* frame, VkFormat format,
     generated = warm && warm_streak >= LSFG_RECURRENCE_FRAMES && last_generations > 0;
     generated_frames.fetch_add(GeneratedFrameCount(), std::memory_order_relaxed);
 
-    const bool use_fsr3 = Settings::FrameGenTypeInUse() == Settings::FrameGenType::Fsr3;
+    const bool use_fsr3 = active_type == Settings::FrameGenType::Fsr3;
 
     // Every 10 s: game frames and generated frames per second. Without it a log can't tell
     // whether the built-in frame generation ran or only said so in the status bar.
@@ -319,9 +340,9 @@ void FrameGen::Process(const Device& device, Frame* frame, VkFormat format,
 
     if (ffx_frame) {
         // Optical flow already ran (ffx_chain->Process).
-    } else if (use_fsr3 && fsr3_chain) {
+    } else if (use_fsr3 && optical_flow_chain) {
         scheduler.RequestOutsideRenderPassOperationContext();
-        fsr3_chain->Process(device, scheduler, *frame->image, *frame->storage_view, count);
+        optical_flow_chain->Process(device, scheduler, *frame->image, *frame->storage_view, count);
     } else if (chain) {
         scheduler.RequestOutsideRenderPassOperationContext();
         scheduler.Record([this, source = *frame->image, extent, count,
@@ -385,15 +406,16 @@ void FrameGen::GenerateInto(const Device& device, Frame* destination, size_t gen
         }
         return;
     }
-    const bool use_fsr3 = Settings::FrameGenTypeInUse() == Settings::FrameGenType::Fsr3;
+    const bool use_fsr3 = Settings::FrameGenTypeInUse() == Settings::FrameGenType::Fsr3 ||
+                          Settings::FrameGenTypeInUse() == Settings::FrameGenType::NvidiaDlssG;
 
-    if (use_fsr3 && fsr3_chain) {
+    if (use_fsr3 && optical_flow_chain) {
         const f32 blend = static_cast<f32>(generation + 1) / static_cast<f32>(last_generations + 1);
         const f32 flow_scale = ConfiguredFlowScale(peak_guest_extent, built_extent);
 
         scheduler.RequestOutsideRenderPassOperationContext();
-        fsr3_chain->Generate(device, scheduler, *destination->image, *destination->storage_view,
-                             blend, flow_scale);
+        optical_flow_chain->Generate(device, scheduler, *destination->image, *destination->storage_view,
+                                     blend, flow_scale);
     } else if (chain) {
         chain->SetTarget(device, last_generations, generation, destination->index,
                          *destination->storage_view);
@@ -413,12 +435,13 @@ void FrameGen::GenerateInto(const Device& device, Frame* destination, size_t gen
 void FrameGen::Rebuild(const Device& device, VkExtent2D extent, VkFormat format, f32 flow_scale) {
     scheduler.Finish();
     chain.reset();
-    fsr3_chain.reset();
+    optical_flow_chain.reset();
 
     built_flow_scale = flow_scale;
 
-    if (Settings::FrameGenTypeInUse() == Settings::FrameGenType::Fsr3) {
-        fsr3_chain.emplace(device, memory_allocator, extent, format);
+    if (Settings::FrameGenTypeInUse() == Settings::FrameGenType::Fsr3 ||
+        Settings::FrameGenTypeInUse() == Settings::FrameGenType::NvidiaDlssG) {
+        optical_flow_chain.emplace(device, memory_allocator, extent, format);
     } else {
         chain.emplace(device, memory_allocator, *shaders, extent, format, built_flow_scale);
     }

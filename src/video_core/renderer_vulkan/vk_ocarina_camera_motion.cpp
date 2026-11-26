@@ -435,6 +435,9 @@ struct OcarinaUpscaleInputs {
     f32 camera_near = 0.1f;
     f32 camera_far = 10000.0f;
     f32 camera_fov = 1.0f;
+    std::array<f32, 16> view_projection{};
+    std::array<f32, 16> clip_to_previous_clip{};
+    bool has_camera{};
 };
 
 // The upscaler Ocarina's live replacement runs: NVIDIA DLSS (Streamline), AMD FSR from AMD's
@@ -485,9 +488,12 @@ public:
         inputs.reset = in.reset;
         inputs.depth_inverted = in.depth_inverted;
         inputs.hdr = in.hdr;
-        inputs.camera_near = in.camera_near;
-        inputs.camera_far = in.camera_far;
-        inputs.camera_fov = in.camera_fov;
+        if (in.has_camera) {
+            inputs.camera = StreamlineDlssUpscaler::Inputs::Camera{
+                .view_projection = in.view_projection,
+                .clip_to_previous_clip = in.clip_to_previous_clip,
+            };
+        }
         return upscaler.Upscale(inputs);
     }
 
@@ -1556,6 +1562,9 @@ bool OcarinaLiveDlss::Record(VkImageView color, VkImageView depth, VkImageView t
             .camera_near = planes.near_plane,
             .camera_far = planes.far_plane,
             .camera_fov = planes.fov,
+            .view_projection = current,
+            .clip_to_previous_clip = clip_to_previous_clip,
+            .has_camera = true,
         })) {
         state.scheduler.InvalidateState();
         return false;

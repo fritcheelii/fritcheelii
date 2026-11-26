@@ -34,10 +34,13 @@ static const std::map<Settings::AntiAliasing, QString> anti_aliasing_texts_map =
 };
 
 static const std::map<Settings::FrameGenType, QString> frame_gen_type_texts_map = {
-    {Settings::FrameGenType::Lsfg, QStringLiteral(QT_TRANSLATE_NOOP("MainWindow", "LSFG"))},
     {Settings::FrameGenType::Fsr3, QStringLiteral(QT_TRANSLATE_NOOP("MainWindow", "Optical Flow"))},
 #ifdef _WIN32 // AMD ships its frame generation runtime for Windows only
-    {Settings::FrameGenType::AmdFsr, QStringLiteral(QT_TRANSLATE_NOOP("MainWindow", "AMD FSR"))},
+    {Settings::FrameGenType::AmdFsr, QStringLiteral(QT_TRANSLATE_NOOP("MainWindow", "AMD FSR 3"))},
+#endif
+#ifdef EGLANTINE_STREAMLINE
+    {Settings::FrameGenType::NvidiaDlssG,
+     QStringLiteral(QT_TRANSLATE_NOOP("MainWindow", "DLSS-G"))},
 #endif
 };
 

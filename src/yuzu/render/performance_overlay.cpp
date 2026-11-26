@@ -36,13 +36,13 @@
 #endif
 
 namespace {
-constexpr int FullHeight = 44;
-constexpr int CompactHeight = 36;
-constexpr int HeaderHeight = 18;
+constexpr int FullHeight = 40;
+constexpr int CompactHeight = 34;
+constexpr int HeaderHeight = 14;
 constexpr int Edge = 5;    // the gold edge on the left
 constexpr int Pad = 12;    // around the cells
 constexpr int Gap = 14;    // between cells, with a hairline in the middle
-constexpr int Margin = 14; // from the game picture's border, in a corner
+constexpr int Margin = 6;  // from the game picture's border, in a corner
 constexpr int Snap = 18;   // how near a border the dragged bar jumps to it
 constexpr int GraphWidth = 112;
 
@@ -114,14 +114,72 @@ double QueryCpuClockGhz() {
                       static_cast<ULONG>(info.size() * sizeof(ProcPowerInfo))) != 0) {
         return 0.0;
     }
-    ULONG best_mhz = 0;
+    ULONG base_mhz = 0;
+    ULONG current_mhz = 0;
     for (const auto& entry : info) {
+        if (entry.MaxMhz > base_mhz) {
+            base_mhz = entry.MaxMhz;
+        }
         const ULONG mhz = entry.CurrentMhz > 0 ? entry.CurrentMhz : entry.MaxMhz;
-        if (mhz > best_mhz) {
-            best_mhz = mhz;
+        if (mhz > current_mhz) {
+            current_mhz = mhz;
         }
     }
-    return best_mhz > 0 ? static_cast<double>(best_mhz) / 1000.0 : 0.0;
+    if (base_mhz > 0) {
+        // Query live CPU frequency via Windows PDH ("% Processor Performance" * BaseMHz / 100),
+        // matching Task Manager's real-time Turbo Boost clock readout without needing a driver.
+        using PdhHandle = HANDLE;
+        struct PdhFmtCounterValue {
+            LONG CStatus;
+            double doubleValue;
+        };
+        using PdhOpenQueryWFn = LONG(WINAPI*)(LPCWSTR, ULONG_PTR, PdhHandle*);
+        using PdhAddEnglishCounterWFn = LONG(WINAPI*)(PdhHandle, LPCWSTR, ULONG_PTR, PdhHandle*);
+        using PdhCollectQueryDataFn = LONG(WINAPI*)(PdhHandle);
+        using PdhGetFormattedCounterValueFn =
+            LONG(WINAPI*)(PdhHandle, DWORD, LPDWORD, PdhFmtCounterValue*);
+
+        struct PdhState {
+            bool tried = false;
+            bool ready = false;
+            bool has_prev = false;
+            PdhHandle query = nullptr;
+            PdhHandle counter = nullptr;
+            PdhCollectQueryDataFn collect = nullptr;
+            PdhGetFormattedCounterValueFn get_val = nullptr;
+        };
+        static PdhState pdh;
+        if (!pdh.tried) {
+            pdh.tried = true;
+            if (HMODULE mod = LoadLibraryW(L"pdh.dll")) {
+                auto open_q = reinterpret_cast<PdhOpenQueryWFn>(
+                    GetProcAddress(mod, "PdhOpenQueryW"));
+                auto add_c = reinterpret_cast<PdhAddEnglishCounterWFn>(
+                    GetProcAddress(mod, "PdhAddEnglishCounterW"));
+                pdh.collect = reinterpret_cast<PdhCollectQueryDataFn>(
+                    GetProcAddress(mod, "PdhCollectQueryData"));
+                pdh.get_val = reinterpret_cast<PdhGetFormattedCounterValueFn>(
+                    GetProcAddress(mod, "PdhGetFormattedCounterValue"));
+                if (open_q && add_c && pdh.collect && pdh.get_val &&
+                    open_q(nullptr, 0, &pdh.query) == 0 &&
+                    add_c(pdh.query, L"\\Processor Information(_Total)\\% Processor Performance", 0,
+                          &pdh.counter) == 0) {
+                    pdh.collect(pdh.query);
+                    pdh.has_prev = true;
+                    pdh.ready = true;
+                }
+            }
+        }
+        if (pdh.ready && pdh.collect(pdh.query) == 0 && pdh.has_prev) {
+            PdhFmtCounterValue val{};
+            constexpr DWORD pdh_fmt_double = 0x00000200;
+            if (pdh.get_val(pdh.counter, pdh_fmt_double, nullptr, &val) == 0 && val.CStatus == 0 &&
+                val.doubleValue > 1.0) {
+                return (static_cast<double>(base_mhz) / 1000.0) * (val.doubleValue / 100.0);
+            }
+        }
+    }
+    return current_mhz > 0 ? static_cast<double>(current_mhz) / 1000.0 : 0.0;
 }
 
 int QueryMaxCpuCorePercent() {
@@ -798,9 +856,11 @@ void PerformanceOverlay::paintEvent(QPaintEvent*) {
     const int y0 = has_header ? HeaderHeight : 0;
     const int h = height() - y0;
     if (has_header) {
-        painter.setFont(m_label);
+        QFont header_font = m_label;
+        header_font.setPointSizeF(7.5);
+        painter.setFont(header_font);
         painter.setPen(QColor{0xdc, 0xdc, 0xe4});
-        painter.drawText(QRect{Edge + Pad, 1, width() - Edge - Pad * 2, HeaderHeight - 1},
+        painter.drawText(QRect{Edge + Pad, 0, width() - Edge - Pad * 2, HeaderHeight},
                          Qt::AlignLeft | Qt::AlignVCenter, m_hw_banner_text);
         painter.setPen(QPen{QColor{255, 255, 255, 28}, 1.0});
         painter.drawLine(QPointF{static_cast<qreal>(Edge), static_cast<qreal>(y0)},

@@ -246,13 +246,14 @@ bool EnsureOoTButtonIconsGenerated(const VirtualDir& romfs_dir,
     const std::filesystem::path blarc_out =
         style_output_dir / "UI" / "Layout2Archive" / "Common.Product.100.Nin_Ounce_NVN2.blarc.zs";
 
-    const bool need_bntx = !FileExistsNonEmpty(bntx_out);
+    const bool need_v3 = !FileExistsNonEmpty(style_output_dir / ".patch_v3");
+    const bool need_bntx =
+        !FileExistsNonEmpty(bntx_out) || ((style_idx == 1 || style_idx == 5) && need_v3);
     const bool need_font = !FileExistsNonEmpty(font_out);
     const bool need_rsize = !FileExistsNonEmpty(rsize_out);
-    const bool need_blarc = (style_idx >= 5) && (!FileExistsNonEmpty(blarc_out) ||
-                                                !FileExistsNonEmpty(style_output_dir / ".patch_v2"));
+    const bool need_blarc = (style_idx >= 5) && (!FileExistsNonEmpty(blarc_out) || need_v3);
 
-    if (!need_bntx && !need_font && !need_rsize && !need_blarc) {
+    if (!need_bntx && !need_font && !need_rsize && !need_blarc && !need_v3) {
         return true;
     }
     if (!romfs_dir) {
@@ -417,8 +418,11 @@ bool EnsureOoTButtonIconsGenerated(const VirtualDir& romfs_dir,
             LOG_WARNING(Loader, "OoT button patcher: failed to write Common.blarc.zs");
             return false;
         }
-        const std::array<u8, 2> marker{'v', '2'};
-        WriteFileAtomic(style_output_dir / ".patch_v2", marker);
+    }
+
+    if (need_v3) {
+        const std::array<u8, 2> marker{'v', '3'};
+        WriteFileAtomic(style_output_dir / ".patch_v3", marker);
     }
 
     LOG_INFO(Loader, "OoT button icon/layout patch (style={}) generated successfully.", style_idx);

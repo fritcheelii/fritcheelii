@@ -59,15 +59,12 @@ void MainWindow::SetUpFritchiiUi() {
         if (box.clickedButton() == remove) {
             QtCommon::Game::RemoveAllTransferableShaderCaches(program_id);
             QtCommon::Game::RemoveVulkanDriverPipelineCache(program_id);
-            if (QMessageBox::question(
-                    this, title,
-                    tr("Shader cache cleared.\n\nRestart FritCheeLii now so the clean cache "
-                       "state is loaded?"),
-                    QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes) == QMessageBox::Yes) {
-                QProcess::startDetached(QCoreApplication::applicationFilePath(),
-                                        QCoreApplication::arguments());
-                QCoreApplication::quit();
-            }
+            QMessageBox::information(
+                this, title,
+                tr("Shader cache cleared.\n\nFritCheeLii will now restart to load the clean "
+                   "cache state."));
+            QProcess::startDetached(QCoreApplication::applicationFilePath(), {});
+            QCoreApplication::quit();
         }
     };
 

@@ -15,6 +15,9 @@
 #include "common/polyfill_thread.h"
 #include "video_core/vulkan_common/vulkan_memory_allocator.h"
 #include "video_core/vulkan_common/vulkan_wrapper.h"
+#ifdef EGLANTINE_STREAMLINE
+#include "video_core/vulkan_common/streamline_frame_gen.h"
+#endif
 
 namespace Core::Frontend {
 class EmuWindow;
@@ -46,6 +49,10 @@ struct Frame {
     VkRect2D frame_gen_rect{}; ///< Where the game picture sits in the frame.
     /// AMD frame generation: this frame drawn from the game's image before its HUD, or null.
     VkImage frame_gen_hudless{};
+#ifdef EGLANTINE_STREAMLINE
+    bool dlssg_active{};
+    Streamline::FrameGenFrame frame_gen_frame{};
+#endif
 };
 
 class PresentManager {

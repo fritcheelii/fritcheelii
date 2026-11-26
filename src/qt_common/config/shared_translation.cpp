@@ -263,9 +263,13 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
     INSERT(Settings, bg_blue, QString(), QString());
 
     INSERT(Settings, frame_gen, tr("Enable Frame Generation"),
-           tr("Paused while HDR output is active."));
+           tr("Duplicates visual smoothness by inserting intermediate frames (2X/3X). Uses extra "
+              "GPU/VRAM — keep OFF below 30 real FPS or on 4 GB GPUs if base FPS drops. Paused "
+              "while HDR output is active."));
     INSERT(Settings, frame_gen_type, tr("Frame Generation Type"),
-           tr("AMD FSR Frame Generation doubles FPS in OoT (needs 1X + restart; uses ~1.5 GB RAM)."));
+           tr("Optical Flow: 100% built-in, light, works on any GPU (GTX/RTX/AMD/Intel).\n"
+              "AMD FSR 3 Frame Gen: uses real game motion vectors (best free quality for AMD / "
+              "RTX 20–30 / Intel, 6–8 GB+ VRAM)."));
     INSERT(Settings, amd_frame_gen_version, tr("AMD Frame Generation Version"),
            tr("Auto picks FSR 4 on RX 9000 and FSR 3.1 on all other GPUs. Requires restart."));
     INSERT(Settings, frame_gen_multiplier, tr("Frame Generation Multiplier"), QString());
@@ -603,10 +607,15 @@ std::unique_ptr<ComboboxTranslationMap> ComboboxEnumeration(QObject* parent) {
          }});
     translations->insert({Settings::EnumMetadata<Settings::FrameGenType>::Index(),
                           {
-                              PAIR(FrameGenType, Lsfg, tr("Lossless Scaling (LSFG)")),
-                              PAIR(FrameGenType, Fsr3, tr("Optical Flow Interpolation (built-in)")),
+                              PAIR(FrameGenType, Fsr3,
+                                   tr("Optical Flow (All GPUs — Built-in & Light)")),
 #ifdef _WIN32 // AMD ships its frame generation runtime for Windows only
-                              PAIR(FrameGenType, AmdFsr, tr("AMD FSR Frame Generation (Ocarina, restart)")),
+                              PAIR(FrameGenType, AmdFsr,
+                                   tr("AMD FSR 3 Frame Gen (AMD / RTX 20–30 / Intel — 6–8 GB+)")),
+#endif
+#ifdef EGLANTINE_STREAMLINE
+                              PAIR(FrameGenType, NvidiaDlssG,
+                                   tr("NVIDIA DLSS Frame Gen (RTX 40 / 50 Only — Experimental)")),
 #endif
                           }});
     translations->insert({Settings::EnumMetadata<Settings::AmdFrameGenVersion>::Index(),

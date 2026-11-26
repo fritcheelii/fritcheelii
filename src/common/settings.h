@@ -472,7 +472,7 @@ struct Values {
                                              Category::Miscellaneous};
     Setting<bool> test_precache_crash_skip{linkage, true, "test_precache_crash_skip",
                                              Category::Miscellaneous};
-    Setting<bool> test_ubo_miss_bypass{linkage, false, "test_ubo_miss_bypass",
+    Setting<bool> test_ubo_miss_bypass{linkage, true, "test_ubo_miss_bypass",
                                          Category::Miscellaneous};
     Setting<bool> test_ubo_16k_stream{linkage, false, "test_ubo_16k_stream",
                                         Category::Miscellaneous};

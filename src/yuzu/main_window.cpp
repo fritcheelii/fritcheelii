@@ -4211,6 +4211,12 @@ bool MainWindow::UsingExclusiveFullscreen() {
 
 void MainWindow::ShowFullscreen() {
     const auto show_fullscreen = [this](QWidget* window) {
+#ifdef _WIN32
+        window->showFullScreen();
+        window->raise();
+        window->activateWindow();
+        return;
+#else
         if (UsingExclusiveFullscreen()) {
             window->showFullScreen();
             return;
@@ -4221,6 +4227,7 @@ void MainWindow::ShowFullscreen() {
         window->setGeometry(screen_geometry);
         window->raise();
         window->showNormal();
+#endif
     };
 
     if (ui->action_Single_Window_Mode->isChecked()) {
@@ -4238,6 +4245,10 @@ void MainWindow::ShowFullscreen() {
 
 void MainWindow::HideFullscreen() {
     if (ui->action_Single_Window_Mode->isChecked()) {
+#ifdef _WIN32
+        showNormal();
+        restoreGeometry(UISettings::values.geometry);
+#else
         if (UsingExclusiveFullscreen()) {
             showNormal();
             restoreGeometry(UISettings::values.geometry);
@@ -4248,10 +4259,15 @@ void MainWindow::HideFullscreen() {
             raise();
             show();
         }
+#endif
 
         statusBar()->setVisible(ui->action_Show_Status_Bar->isChecked());
         ui->menubar->show();
     } else {
+#ifdef _WIN32
+        render_window->showNormal();
+        render_window->restoreGeometry(UISettings::values.renderwindow_geometry);
+#else
         if (UsingExclusiveFullscreen()) {
             render_window->showNormal();
             render_window->restoreGeometry(UISettings::values.renderwindow_geometry);
@@ -4262,6 +4278,7 @@ void MainWindow::HideFullscreen() {
             render_window->raise();
             render_window->show();
         }
+#endif
     }
 }
 
@@ -6244,10 +6261,12 @@ void MainWindow::UpdateFrameGenButton() {
     // AMD FSR picked shows as AMD FSR, also where it runs as the built-in FSR 3 passes
     // (FrameGenTypeInUse says Optical Flow there, the path they share).
     const bool amd = Settings::values.frame_gen_type.GetValue() == Settings::FrameGenType::AmdFsr;
-    const QString type = ConfigurationShared::frame_gen_type_texts_map
-                             .find(amd ? Settings::FrameGenType::AmdFsr
-                                       : Settings::FrameGenTypeInUse())
-                             ->second.toUpper();
+    const auto fg_it = ConfigurationShared::frame_gen_type_texts_map.find(
+        amd ? Settings::FrameGenType::AmdFsr : Settings::FrameGenTypeInUse());
+    const QString type = (fg_it != ConfigurationShared::frame_gen_type_texts_map.end()
+                              ? fg_it->second
+                              : QStringLiteral("Optical Flow"))
+                             .toUpper();
     const u32 target_rate = Settings::values.frame_gen_target_rate.GetValue();
     // AMD's frame generation always adds one frame per game frame.
     const QString mode = amd ? tr("FG %1 2X").arg(type)

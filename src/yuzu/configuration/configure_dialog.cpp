@@ -202,14 +202,20 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
             tr("Intercepts OoT's Zstd decompression calls in the JIT and runs native host libzstd "
                "for faster area loads and lower CPU load. Requires game restart."),
             Settings::values.test_host_zstd.GetValue());
+        auto* cb_ubo_miss = add_switch(
+            gb_cpu, lay_cpu, tr("UBO Reuse Miss-Streak Bypass (Fritchii v6.5 EXP115)"),
+            tr("After 8 consecutive misses on a per-draw uniform slot, streams directly for the "
+               "next 64 binds without memcmp or extra slot copies. Reduces CPU load on dynamic "
+               "matrices. Takes effect immediately."),
+            Settings::values.test_ubo_miss_bypass.GetValue());
 
         v->addStretch(1);
         scroll->setWidget(content);
         outer->addWidget(scroll);
 
         apply_graphics_extra_plus = [cb_mip, cb_shadow, cb_poll, cb_changebank, cb_jit, cb_occl,
-                                     cb_tidy, cb_zstd, cb_vram_gc, cb_fast_astc, cb_byte_rb,
-                                     cb_crash_skip]() {
+                                     cb_tidy, cb_zstd, cb_ubo_miss, cb_vram_gc, cb_fast_astc,
+                                     cb_byte_rb, cb_crash_skip]() {
             Settings::values.test_4k_mip_cap.SetValue(cb_mip->isChecked());
             Settings::values.test_shadow_size_steps.SetValue(cb_shadow->isChecked());
             Settings::values.test_poll_backoff.SetValue(cb_poll->isChecked());
@@ -218,6 +224,7 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
             Settings::values.test_occlusion_off.SetValue(cb_occl->isChecked());
             Settings::values.test_tex_tidy_1s.SetValue(cb_tidy->isChecked());
             Settings::values.test_host_zstd.SetValue(cb_zstd->isChecked());
+            Settings::values.test_ubo_miss_bypass.SetValue(cb_ubo_miss->isChecked());
             Settings::values.test_vram_gc_4gb.SetValue(cb_vram_gc->isChecked());
             Settings::values.test_fast_astc_decoder.SetValue(cb_fast_astc->isChecked());
             Settings::values.test_exact_byte_readback.SetValue(cb_byte_rb->isChecked());
@@ -226,7 +233,7 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
     }
     ui->tabWidget->addTab(graphics_extra_plus_tab.get(), tr("Extra+"));
 
-    // FritCheeLii Test Lab (experimental A/B switches ported from Fritchii v6.5, OFF by default)
+    // FritCheeLii Test Lab (experimental A/B switches, OFF by default)
     graphics_test_tab = std::make_unique<QWidget>(this);
     graphics_test_tab->setAccessibleName(tr("Test"));
     {
@@ -259,13 +266,6 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
             return cb;
         };
 
-        auto* cb_ubo_miss = add_test_switch(
-            tr("UBO Reuse Miss-Streak Bypass (Fritchii v6.5 EXP115)"),
-            tr("After 8 consecutive misses on a per-draw uniform slot, streams directly for the "
-               "next 64 binds without memcmp or extra slot copies. Reduces CPU load on dynamic "
-               "matrices. Takes effect immediately."),
-            Settings::values.test_ubo_miss_bypass.GetValue());
-
         auto* cb_ubo_16k = add_test_switch(
             tr("16 KiB Bone Palette UBO Streaming (Fritchii v6.5 EXP116)"),
             tr("Raises Vulkan uniform stream reuse cap from 4 KiB to 16 KiB so Ocarina of Time's "
@@ -284,8 +284,7 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
         scroll->setWidget(content);
         outer->addWidget(scroll);
 
-        apply_graphics_test = [cb_ubo_miss, cb_ubo_16k, cb_mem_prio]() {
-            Settings::values.test_ubo_miss_bypass.SetValue(cb_ubo_miss->isChecked());
+        apply_graphics_test = [cb_ubo_16k, cb_mem_prio]() {
             Settings::values.test_ubo_16k_stream.SetValue(cb_ubo_16k->isChecked());
             Settings::values.test_vram_memory_priority.SetValue(cb_mem_prio->isChecked());
         };

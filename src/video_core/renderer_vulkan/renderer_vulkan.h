@@ -117,6 +117,7 @@ private:
     Frame* previous_frame = nullptr;  // Store the previous frame for interpolation
     VkCommandBuffer BeginSingleTimeCommands();
     void EndSingleTimeCommands(VkCommandBuffer command_buffer);
+    VkSurfaceKHR PresentationSurface();
     void Report() const;
 
     /// The encoding and luminances this frame is presented with; picks the swapchain format

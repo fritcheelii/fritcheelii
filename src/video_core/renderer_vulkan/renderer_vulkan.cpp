@@ -48,6 +48,7 @@
 #include "video_core/vulkan_common/vulkan_wrapper.h"
 #ifdef EGLANTINE_STREAMLINE
 #include "video_core/vulkan_common/streamline.h"
+#include "video_core/vulkan_common/streamline_frame_gen.h"
 #endif
 #ifdef __ANDROID__
 #include <jni.h>
@@ -166,7 +167,7 @@ try
     , library(OpenLibrary(context.get()))
     , dld()
 #ifdef EGLANTINE_STREAMLINE
-    , streamline_started(Streamline::Start())
+    , streamline_started(Streamline::Start(render_window.GetWindowInfo().render_surface))
 #endif
     // Create raw Vulkan instance first
     , instance(CreateInstance(*library,
@@ -183,7 +184,7 @@ try
     , memory_allocator(device)
     , state_tracker()
     , scheduler(device, state_tracker)
-    , swapchain(*surface,
+    , swapchain(PresentationSurface(),
                 device,
                 scheduler,
                render_window.GetFramebufferLayout().width,
@@ -268,6 +269,12 @@ void RendererVulkan::Composite(std::span<const Tegra::FramebufferConfig> framebu
     SCOPE_EXIT {
         render_window.OnFrameDisplayed();
     };
+#ifdef EGLANTINE_STREAMLINE
+    Streamline::FrameGenBeginFrame();
+    SCOPE_EXIT {
+        Streamline::FrameGenNextFrame();
+    };
+#endif
 
     RenderAppletCaptureLayer(framebuffers);
 
@@ -345,6 +352,10 @@ void RendererVulkan::Composite(std::span<const Tegra::FramebufferConfig> framebu
         scheduler.MarkFrameEnd(++trace_frame);
     }
     scheduler.Flush(*frame->render_ready);
+#ifdef EGLANTINE_STREAMLINE
+    frame->dlssg_active = Streamline::FrameGenSession();
+    frame->frame_gen_frame = Streamline::FrameGenEndFrame();
+#endif
 
     const auto presenting = trace ? std::chrono::steady_clock::now()
                                   : std::chrono::steady_clock::time_point{};
@@ -425,6 +436,24 @@ HdrPresent RendererVulkan::CaptureHdrPresent() const {
                                                Settings::values.hdr_reference_white.GetValue());
     return {VK_COLOR_SPACE_SRGB_NONLINEAR_KHR, static_cast<f32>(told.reference_white),
             static_cast<f32>(told.peak_luminance)};
+}
+
+VkSurfaceKHR RendererVulkan::PresentationSurface() {
+#ifdef EGLANTINE_STREAMLINE
+    const auto& window_info = render_window.GetWindowInfo();
+    if (Streamline::FrameGenSession()) {
+        const VkSurfaceKHR registered =
+            window_info.type == Core::Frontend::WindowSystemType::Windows
+                ? Streamline::CreateFrameGenSurface(*instance, window_info.render_surface)
+                : VK_NULL_HANDLE;
+        if (registered) {
+            surface = vk::SurfaceKHR(registered, *instance, instance.Dispatch());
+        } else {
+            Streamline::DisableFrameGen("Streamline could not make the window's surface");
+        }
+    }
+#endif
+    return *surface;
 }
 
 void RendererVulkan::Report() const {

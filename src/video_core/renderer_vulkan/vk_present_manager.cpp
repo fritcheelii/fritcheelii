@@ -390,6 +390,9 @@ void PresentManager::UpdateHdrMetadata() {
 
 // Returns false after discarding a deferred or incompatible frame; creation exceptions propagate.
 bool PresentManager::RecreateSwapchain(Frame* frame) {
+#ifdef EGLANTINE_STREAMLINE
+    Streamline::FrameGenSuspend();
+#endif
     if (swapchain.Create(*surface, frame->width, frame->height, frame->format,
                          frame->color_space)) {
         SetImageCount();
@@ -770,7 +773,25 @@ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
                        scale(height, extent.height, frame->height)},
         };
     }
+    // Present
+#ifdef EGLANTINE_STREAMLINE
+    if (frame->dlssg_active) {
+        Streamline::FrameGenBeforePresent({
+            .frame = frame->frame_gen_frame,
+            .guest_rect = frame->frame_gen_rect,
+            .frame_extent = {frame->width, frame->height},
+            .swapchain_extent = extent,
+            .swapchain_format = swapchain.GetImageFormat(),
+            .swapchain_images = static_cast<u32>(swapchain.GetImageCount()),
+        });
+    }
+#endif
     swapchain.Present(render_semaphore, frame_gen);
+#ifdef EGLANTINE_STREAMLINE
+    if (frame->dlssg_active) {
+        Streamline::FrameGenAfterPresent(frame->frame_gen_frame.index);
+    }
+#endif
 }
 
 } // namespace Vulkan

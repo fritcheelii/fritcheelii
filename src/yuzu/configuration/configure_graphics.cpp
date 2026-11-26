@@ -356,17 +356,7 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
 #ifdef EGLANTINE_STREAMLINE
         } else if (setting->Id() == Settings::values.nvidia_dlss.Id()) {
             nvidia_dlss_cb = widget->checkbox;
-            // NVIDIA's files and a download button under the checkbox.
-            QWidget* group = new QWidget(this);
-            QVBoxLayout* group_layout = new QVBoxLayout(group);
-            group_layout->setContentsMargins(0, 0, 0, 0);
-            group_layout->setSpacing(2);
-            group_layout->addWidget(widget);
-            NvidiaDlssPanel* panel = new NvidiaDlssPanel(group);
-            group_layout->addWidget(panel);
-            panel->setVisible(widget->checkbox->isChecked());
-            connect(widget->checkbox, &QCheckBox::toggled, panel, &QWidget::setVisible);
-            hold_graphics.emplace(setting->Id(), group);
+            hold_graphics.emplace(setting->Id(), widget);
 #endif
         } else if (setting->Id() == Settings::values.amd_fsr4.Id()) {
             amd_fsr4_cb = widget->checkbox;
@@ -382,37 +372,33 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
         }
     }
 
-    // 1) Top box: Ocarina of Time 3D Render Scale & Quality (works on all GPUs, zero extra VRAM)
+    auto find_w = [&](u32 id) -> QWidget* {
+        const auto it = hold_graphics.find(id);
+        return it != hold_graphics.end() ? it->second : nullptr;
+    };
+    QWidget* amd_fsr4_w = find_w(Settings::values.amd_fsr4.Id());
+    QWidget* nvidia_dlss_w = find_w(Settings::values.nvidia_dlss.Id());
+    QWidget* game_dlss_w = find_w(Settings::values.game_dlss_network.Id());
+    QWidget* dump_flow_w = find_w(Settings::values.frame_gen_dump_flow.Id());
+    for (QWidget* hidden_w : {amd_fsr4_w, nvidia_dlss_w, game_dlss_w, dump_flow_w}) {
+        if (hidden_w != nullptr) {
+            hidden_w->setVisible(false);
+        }
+    }
+
+    // 1) Top box: Unified Ocarina of Time Upscaling Method & 3D Render Scale
     const std::array oot_scale_ids{
         Settings::values.oot_fsr_preset.Id(),
         Settings::values.oot_docked_output.Id(),
         Settings::values.oot_anti_aliasing.Id(),
     };
-    QGroupBox* oot_scale_box = nullptr;
-    for (const u32 id : oot_scale_ids) {
-        const auto it = hold_graphics.find(id);
-        if (it == hold_graphics.end()) {
-            continue;
-        }
-        if (oot_scale_box == nullptr) {
-            oot_scale_box = new QGroupBox(tr("Ocarina of Time — 3D Render Scale && Quality"), this);
-            auto* box_layout = new QVBoxLayout(oot_scale_box);
-            auto* hint = new QLabel(
-                tr("Adjusts internal 3D resolution on ALL GPUs (NVIDIA, AMD, Intel) with zero "
-                   "extra VRAM cost — works even with FSR 4 and DLSS OFF. Requires game restart."),
-                oot_scale_box);
-            hint->setWordWrap(true);
-            box_layout->addWidget(hint);
-            graphics_layout.addWidget(oot_scale_box);
-        }
-        oot_scale_box->layout()->addWidget(it->second);
-    }
-
-    // 2) Bottom box: Optional temporal upscaling (FSR 4 / DLSS) & Frame Generation
-    const std::array upscale_fg_ids{
+    const std::array upscale_hidden_ids{
         Settings::values.amd_fsr4.Id(),
         Settings::values.nvidia_dlss.Id(),
         Settings::values.game_dlss_network.Id(),
+        Settings::values.frame_gen_dump_flow.Id(),
+    };
+    const std::array fg_ids{
         Settings::values.frame_gen.Id(),
         Settings::values.frame_gen_type.Id(),
         Settings::values.amd_frame_gen_version.Id(),
@@ -423,96 +409,151 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
         Settings::values.frame_gen_queue_target.Id(),
     };
 
+    {
+        auto* oot_scale_box =
+            new QGroupBox(tr("Ocarina of Time — Upscaling && 3D Render Scale"), this);
+        auto* box_layout = new QVBoxLayout(oot_scale_box);
+
+        auto* method_row = new QWidget(oot_scale_box);
+        auto* method_layout = new QBoxLayout(QBoxLayout::LeftToRight, method_row);
+        method_layout->setContentsMargins(0, 0, 0, 0);
+        auto* method_label = new QLabel(tr("Upscaling Method:"), method_row);
+        auto* method_combo = new QComboBox(method_row);
+        enum UpscaleChoice {
+            UpscaleNone = 0,
+            UpscaleFsr4 = 1,
+            UpscaleNvidiaDlss = 2,
+            UpscaleGameDlss = 3,
+        };
+        method_combo->addItem(tr("None — 3D Render Scale Only (Zero Extra VRAM / 4 GB)"),
+                              UpscaleNone);
+        if (amd_fsr4_cb != nullptr) {
+            method_combo->addItem(tr("AMD FSR 4 / 3.1 (Temporal — 8 GB+ / Radeon)"), UpscaleFsr4);
+        }
+#ifdef EGLANTINE_STREAMLINE
+        if (nvidia_dlss_cb != nullptr) {
+            method_combo->addItem(tr("NVIDIA DLSS (RTX GPUs Only — Experimental)"),
+                                  UpscaleNvidiaDlss);
+        }
+#endif
+        if (game_dlss_cb != nullptr) {
+            method_combo->addItem(tr("Game's Built-in DLSS (Slow — Emulated)"), UpscaleGameDlss);
+        }
+        method_layout->addWidget(method_label);
+        method_layout->addStretch(1);
+        method_layout->addWidget(method_combo);
+        box_layout->addWidget(method_row);
+
+#ifdef EGLANTINE_STREAMLINE
+        NvidiaDlssPanel* dlss_panel = new NvidiaDlssPanel(oot_scale_box);
+        box_layout->addWidget(dlss_panel);
+#endif
+
+        auto* upscale_hint = new QLabel(oot_scale_box);
+        upscale_hint->setWordWrap(true);
+        box_layout->addWidget(upscale_hint);
+
+        const auto update_upscale_ui = [=](int choice) {
+            if (amd_fsr4_cb != nullptr) {
+                amd_fsr4_cb->setChecked(choice == UpscaleFsr4);
+            }
+            if (nvidia_dlss_cb != nullptr) {
+                nvidia_dlss_cb->setChecked(choice == UpscaleNvidiaDlss);
+            }
+            if (game_dlss_cb != nullptr) {
+                game_dlss_cb->setChecked(choice == UpscaleGameDlss);
+            }
+#ifdef EGLANTINE_STREAMLINE
+            dlss_panel->setVisible(choice == UpscaleNvidiaDlss);
+#endif
+            switch (choice) {
+            case UpscaleFsr4:
+                upscale_hint->setText(
+                    tr("AMD FSR 4 / 3.1 reconstructs the 3D Render Scale below using temporal "
+                       "motion vectors (requires Resolution 1X and extra VRAM/GPU; keep None on 4 "
+                       "GB / GTX cards). Requires game restart."));
+                break;
+            case UpscaleNvidiaDlss:
+                upscale_hint->setText(
+                    tr("NVIDIA DLSS reconstructs the 3D Render Scale below on RTX Tensor Cores "
+                       "(requires Resolution 1X and extra VRAM; does not work on GTX / AMD). "
+                       "Requires game restart."));
+                break;
+            case UpscaleGameDlss:
+                upscale_hint->setText(
+                    tr("Runs the Switch 2 game's own emulated DLSS network (very heavy on GPU/VRAM). "
+                       "Requires game restart."));
+                break;
+            default:
+                upscale_hint->setText(
+                    tr("Adjusts internal 3D resolution on ALL GPUs (NVIDIA, AMD, Intel) with zero "
+                       "extra VRAM cost. Performance (50%) is recommended for 4 GB GPUs. Requires "
+                       "game restart."));
+                break;
+            }
+        };
+
+        int initial_choice = UpscaleNone;
+        if (nvidia_dlss_cb != nullptr && nvidia_dlss_cb->isChecked()) {
+            initial_choice = UpscaleNvidiaDlss;
+        } else if (amd_fsr4_cb != nullptr && amd_fsr4_cb->isChecked()) {
+            initial_choice = UpscaleFsr4;
+        } else if (game_dlss_cb != nullptr && game_dlss_cb->isChecked()) {
+            initial_choice = UpscaleGameDlss;
+        }
+        const int idx = method_combo->findData(initial_choice);
+        method_combo->setCurrentIndex(idx >= 0 ? idx : 0);
+        update_upscale_ui(method_combo->currentData().toInt());
+
+        connect(method_combo, qOverload<int>(&QComboBox::currentIndexChanged), this,
+                [method_combo, update_upscale_ui](int) {
+                    update_upscale_ui(method_combo->currentData().toInt());
+                });
+
+        for (const u32 id : oot_scale_ids) {
+            if (const auto it = hold_graphics.find(id); it != hold_graphics.end()) {
+                box_layout->addWidget(it->second);
+            }
+        }
+        graphics_layout.addWidget(oot_scale_box);
+    }
+
     for (const auto& [id, widget] : hold_graphics) {
         if (std::ranges::find(oot_scale_ids, id) == oot_scale_ids.end() &&
-            std::ranges::find(upscale_fg_ids, id) == upscale_fg_ids.end()) {
+            std::ranges::find(upscale_hidden_ids, id) == upscale_hidden_ids.end() &&
+            std::ranges::find(fg_ids, id) == fg_ids.end()) {
             graphics_layout.addWidget(widget);
         }
     }
 
-    QGroupBox* upscale_fg_box = nullptr;
-    for (const u32 id : upscale_fg_ids) {
+    // Keep hidden settings widgets owned by graphics_layout so apply_funcs saves them cleanly.
+    for (QWidget* hidden_w : {amd_fsr4_w, nvidia_dlss_w, game_dlss_w, dump_flow_w}) {
+        if (hidden_w != nullptr) {
+            graphics_layout.addWidget(hidden_w);
+        }
+    }
+
+    // 2) Bottom box: Built-in Frame Generation (no external paid apps required)
+    QGroupBox* fg_box = nullptr;
+    for (const u32 id : fg_ids) {
         const auto it = hold_graphics.find(id);
         if (it == hold_graphics.end()) {
             continue;
         }
-        if (upscale_fg_box == nullptr) {
-            upscale_fg_box =
-                new QGroupBox(tr("Advanced Upscaling (FSR 4 / DLSS) && Frame Generation"), this);
-            auto* box_layout = new QVBoxLayout(upscale_fg_box);
+        if (fg_box == nullptr) {
+            fg_box = new QGroupBox(tr("Frame Generation (Built-in)"), this);
+            auto* box_layout = new QVBoxLayout(fg_box);
             auto* hint = new QLabel(
-                tr("Optional temporal upscalers & frame generation (require Resolution 1X and "
-                   "use extra VRAM/GPU). Keep OFF on 4 GB / GTX cards; recommended for 8 GB+ "
-                   "RTX or Radeon RX 6000/7000/9000 GPUs."),
-                upscale_fg_box);
+                tr("Duplicates visual smoothness by inserting intermediate frames. Uses extra "
+                   "GPU/VRAM and works best above 30 real FPS — keep OFF if the game runs below 30 "
+                   "real FPS or if base FPS drops when enabled (common on 4 GB GPUs)."),
+                fg_box);
             hint->setWordWrap(true);
             box_layout->addWidget(hint);
-            graphics_layout.addWidget(upscale_fg_box);
+            graphics_layout.addWidget(fg_box);
         }
-        upscale_fg_box->layout()->addWidget(it->second);
+        fg_box->layout()->addWidget(it->second);
     }
-
-    // Mutual exclusion + auto-hide between FSR 4, NVIDIA DLSS, and Game DLSS:
-    // when one is active, hide the other two so only the active upscaler is shown;
-    // when all are OFF, show all available options.
-    auto find_w = [&](u32 id) -> QWidget* {
-        const auto it = hold_graphics.find(id);
-        return it != hold_graphics.end() ? it->second : nullptr;
-    };
-    QWidget* amd_fsr4_w = find_w(Settings::values.amd_fsr4.Id());
-    QWidget* nvidia_dlss_w = find_w(Settings::values.nvidia_dlss.Id());
-    QWidget* game_dlss_w = find_w(Settings::values.game_dlss_network.Id());
-    auto syncing_upscalers = std::make_shared<bool>(false);
-    auto sync_upscalers = [amd_fsr4_cb, nvidia_dlss_cb, game_dlss_cb, amd_fsr4_w, nvidia_dlss_w,
-                           game_dlss_w, syncing_upscalers](QCheckBox* changed) {
-        if (*syncing_upscalers) {
-            return;
-        }
-        *syncing_upscalers = true;
-        QCheckBox* active = (changed && changed->isChecked()) ? changed
-                            : (amd_fsr4_cb && amd_fsr4_cb->isChecked())     ? amd_fsr4_cb
-                            : (nvidia_dlss_cb && nvidia_dlss_cb->isChecked()) ? nvidia_dlss_cb
-                            : (game_dlss_cb && game_dlss_cb->isChecked())     ? game_dlss_cb
-                                                                              : nullptr;
-        if (active != nullptr) {
-            if (amd_fsr4_cb && amd_fsr4_cb != active && amd_fsr4_cb->isChecked()) {
-                amd_fsr4_cb->setChecked(false);
-            }
-            if (nvidia_dlss_cb && nvidia_dlss_cb != active && nvidia_dlss_cb->isChecked()) {
-                nvidia_dlss_cb->setChecked(false);
-            }
-            if (game_dlss_cb && game_dlss_cb != active && game_dlss_cb->isChecked()) {
-                game_dlss_cb->setChecked(false);
-            }
-            if (amd_fsr4_w) {
-                amd_fsr4_w->setVisible(active == amd_fsr4_cb);
-            }
-            if (nvidia_dlss_w) {
-                nvidia_dlss_w->setVisible(active == nvidia_dlss_cb);
-            }
-            if (game_dlss_w) {
-                game_dlss_w->setVisible(active == game_dlss_cb);
-            }
-        } else {
-            if (amd_fsr4_w) {
-                amd_fsr4_w->setVisible(true);
-            }
-            if (nvidia_dlss_w) {
-                nvidia_dlss_w->setVisible(true);
-            }
-            if (game_dlss_w) {
-                game_dlss_w->setVisible(true);
-            }
-        }
-        *syncing_upscalers = false;
-    };
-    for (QCheckBox* cb : {amd_fsr4_cb, nvidia_dlss_cb, game_dlss_cb}) {
-        if (cb != nullptr) {
-            connect(cb, &QCheckBox::toggled, this,
-                    [sync_upscalers, cb](bool) { sync_upscalers(cb); });
-        }
-    }
-    sync_upscalers(nullptr);
 
     // Hide rather than disable, a disabled widget would read as using the global value
     if (frame_gen_checkbox != nullptr) {
