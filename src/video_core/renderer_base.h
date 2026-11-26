@@ -13,6 +13,7 @@
 
 #include "common/common_funcs.h"
 #include "common/common_types.h"
+#include "common/settings_enums.h"
 #include "core/frontend/framebuffer_layout.h"
 #include "video_core/gpu.h"
 #include "video_core/rasterizer_interface.h"
@@ -55,6 +56,13 @@ struct UpscalerStatus {
     u32 render_width{}, render_height{}, output_width{}, output_height{};
     std::string idle_tag;    ///< Not upscaling: a short reason for the bar
     std::string idle_reason; ///< and the full one for its tooltip.
+};
+
+struct DlssStatus {
+    u64 evaluations{};
+    Settings::NvidiaDlssQuality mode{};
+    Settings::NvidiaDlssQuality requested{};
+    Settings::NvidiaDlssPreset preset{};
 };
 
 struct RendererSettings {
