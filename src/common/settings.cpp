@@ -451,6 +451,10 @@ size_t FrameGenMaxGenerations() {
     return FrameGenMultiplier() - 1;
 }
 
+NvidiaDlssRuntimeSettings GetNvidiaDlssRuntimeSettings() {
+    return {};
+}
+
 void RestoreGlobalState(bool is_powered_on) {
     // If a game is running, DO NOT restore the global settings state
     if (is_powered_on) {

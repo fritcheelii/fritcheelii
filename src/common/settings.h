@@ -1167,6 +1167,12 @@ bool IsNceEnabled();
 void SetCurrentProgramID(u64 program_id);
 u64 GetCurrentProgramID();
 
+struct NvidiaDlssRuntimeSettings {
+    NvidiaDlssQuality quality{NvidiaDlssQuality::Automatic};
+    NvidiaDlssPreset preset{NvidiaDlssPreset::M};
+};
+[[nodiscard]] NvidiaDlssRuntimeSettings GetNvidiaDlssRuntimeSettings();
+
 // Whether the program being loaded is a Switch 2 one (set by the core before the GPU starts).
 void SetCurrentProgramIsSwitch2(bool is_switch2);
 bool CurrentProgramIsSwitch2();

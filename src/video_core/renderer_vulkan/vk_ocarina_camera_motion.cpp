@@ -1563,7 +1563,7 @@ bool OcarinaLiveDlss::Record(VkImageView color, VkImageView depth, VkImageView t
             .camera_far = planes.far_plane,
             .camera_fov = planes.fov,
             .view_projection = current,
-            .clip_to_previous_clip = clip_to_previous_clip,
+            .clip_to_previous_clip = *transform,
             .has_camera = true,
         })) {
         state.scheduler.InvalidateState();
