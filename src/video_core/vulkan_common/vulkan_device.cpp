@@ -520,7 +520,7 @@ Device::Device(VkInstance instance_, vk::PhysicalDevice physical_, VkSurfaceKHR 
     }
 
     SetupFamilies(surface);
-    const auto queue_cis = GetDeviceQueueCreateInfos();
+    auto queue_cis = GetDeviceQueueCreateInfos();
 
     // GetSuitability has already configured the linked list of features for us.
     // Reuse it here.
