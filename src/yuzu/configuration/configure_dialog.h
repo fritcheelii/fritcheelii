@@ -100,8 +100,6 @@ private:
     std::unique_ptr<ConfigureGraphicsExtensions> graphics_extensions_tab;
     std::unique_ptr<QWidget> graphics_extra_plus_tab;
     std::function<void()> apply_graphics_extra_plus;
-    std::unique_ptr<QWidget> graphics_test_tab;
-    std::function<void()> apply_graphics_test;
     std::unique_ptr<ConfigureUi> ui_tab;
     std::unique_ptr<ConfigureGraphics> graphics_tab;
     std::unique_ptr<ConfigureHotkeys> hotkeys_tab;

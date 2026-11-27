@@ -261,7 +261,9 @@ LoadingScreen::LoadingScreen(QWidget* parent)
         {VideoCore::LoadCallbackStage::Prepare, tr("Getting your game ready...")},
         {VideoCore::LoadCallbackStage::Build, tr("Loading saved shaders %1 / %2")},
         {VideoCore::LoadCallbackStage::Complete, tr("Here we go!")},
-        {VideoCore::LoadCallbackStage::Warm, tr("Building shaders %1 / %2 (just this once)")},
+        {VideoCore::LoadCallbackStage::Warm,
+         tr("Building shaders %1 / %2 (Just this once — If you close, progress will continue from "
+            "where it stopped.)")},
     };
     progressbar_style = {
         {VideoCore::LoadCallbackStage::Prepare, PROGRESSBAR_STYLE_PREPARE},

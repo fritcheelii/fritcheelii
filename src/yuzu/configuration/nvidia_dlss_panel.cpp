@@ -316,6 +316,7 @@ QString PathText(const std::filesystem::path& path) {
 } // Anonymous namespace
 
 NvidiaDlssPanel::NvidiaDlssPanel(QWidget* parent) : QWidget(parent) {
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(24, 0, 0, 8);
     layout->setSpacing(6);
@@ -329,6 +330,7 @@ NvidiaDlssPanel::NvidiaDlssPanel(QWidget* parent) : QWidget(parent) {
     status_label = new QLabel(this);
     status_label->setTextFormat(Qt::RichText);
     status_label->setWordWrap(true);
+    status_label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::MinimumExpanding);
     status_row->addWidget(icon_label);
     status_row->addWidget(status_label, 1);
 
@@ -435,6 +437,8 @@ void NvidiaDlssPanel::Refresh() {
     icon_label->setText(ready ? QStringLiteral("<span style=\"color:#2ea043\">&#10004;</span>")
                               : QStringLiteral("<span style=\"color:#d29922\">&#9888;</span>"));
     status_label->setText(status);
+    status_label->adjustSize();
+    updateGeometry();
     status_label->setToolTip(Tr("Folder: %1").arg(PathText(files.folder)));
     download_button->setText(button);
     download_button->setVisible(!ready || !has_frame_gen);

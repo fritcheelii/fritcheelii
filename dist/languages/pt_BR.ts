@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE TS>
+<?xml version='1.0' encoding='utf-8'?>
 <TS version="2.1" language="pt_BR" sourcelanguage="en_US">
     <context>
         <name>AboutDialog</name>
@@ -2199,6 +2198,34 @@ Native AA: 12 GB+. Requer reiniciar o jogo.</translation>
             <source>NVIDIA DLSS Frame Gen (RTX 40 / 50 Only — Experimental)</source>
             <translation>NVIDIA DLSS Frame Gen (Apenas RTX 40 / 50 — Experimental)</translation>
         </message>
+        <message>
+            <source>Optical Flow: 100% built-in, light, works on any GPU (GTX/RTX/AMD/Intel).
+AMD FSR 3 Frame Gen: uses real game motion vectors (AMD / RTX 20–30 / Intel, 6–8 GB+ VRAM).
+NVIDIA DLSS Frame Gen: RTX 40/50 Tensor Cores (automatically falls back to Optical Flow on other GPUs).</source>
+            <translation>Optical Flow: 100% embutido, leve, funciona em qualquer GPU (GTX/RTX/AMD/Intel).
+AMD FSR 3 Frame Gen: usa vetores de movimento reais do jogo (AMD / RTX 20–30 / Intel, 6–8 GB+ VRAM).
+NVIDIA DLSS Frame Gen: Tensor Cores das RTX 40/50 (cai automaticamente para Optical Flow em outras GPUs).</translation>
+        </message>
+        <message>
+            <source>Total frames shown per real game frame (2 = doubles visual FPS). Recommended: 2.</source>
+            <translation>Total de quadros exibidos por quadro real do jogo (2 = dobra o FPS visual). Recomendado: 2.</translation>
+        </message>
+        <message>
+            <source>0 = fixed multiplier above. Set a target (e.g. 60) to generate frames adaptively up to that FPS. AMD FSR and DLSS-G always use 2x.</source>
+            <translation>0 = usa o multiplicador fixo acima. Defina uma meta (ex.: 60) para gerar quadros adaptativamente até esse FPS. AMD FSR e DLSS-G sempre usam 2x.</translation>
+        </message>
+        <message>
+            <source>Automatically chooses the internal motion-estimation resolution for Optical Flow based on screen resolution. Recommended: ON.</source>
+            <translation>Escolhe automaticamente a resolução interna de cálculo de movimento do Optical Flow conforme a resolução da tela. Recomendado: Ligado.</translation>
+        </message>
+        <message>
+            <source>Manual motion-estimation resolution when Auto Flow Scale is OFF. Higher = fewer artifacts on small objects; lower (50%) = lighter on 4 GB GPUs.</source>
+            <translation>Resolução manual do cálculo de movimento quando Auto Flow Scale está desligado. Maior = menos artefatos em objetos pequenos; menor (50%) = mais leve em GPUs de 4 GB.</translation>
+        </message>
+        <message>
+            <source>Extra frames queued before presentation. 0 = lowest input lag (recommended); 1–2 = smoother pacing with slightly higher latency.</source>
+            <translation>Quadros extras na fila antes da apresentação. 0 = menor atraso nos controles (recomendado); 1–2 = ritmo mais suave com um pouco mais de latência.</translation>
+        </message>
     </context>
     <context>
         <name>ConfigureApplets</name>
@@ -3382,6 +3409,26 @@ Gostaria de deletar o salvamento antigo?</translation>
         <message>
             <source>Duplicates visual smoothness by inserting intermediate frames. Uses extra GPU/VRAM and works best above 30 real FPS — keep OFF if the game runs below 30 real FPS or if base FPS drops when enabled (common on 4 GB GPUs).</source>
             <translation>Duplica a fluidez visual inserindo quadros intermediários. Consome GPU/VRAM extra e funciona melhor acima de 30 FPS reais — mantenha OFF se o jogo rodar abaixo de 30 FPS reais ou se o FPS base cair ao ativar (comum em GPUs de 4 GB).</translation>
+        </message>
+        <message>
+            <source>None — 3D Render Scale Only (Sharpest / Highest FPS / 4 GB)</source>
+            <translation>Nenhum — Apenas 3D Render Scale (Mais Nítido / Maior FPS / 4 GB)</translation>
+        </message>
+        <message>
+            <source>AMD FSR 4 / 3.1 (Smooth / Medium FPS — AMD / Intel / GTX / RTX)</source>
+            <translation>AMD FSR 4 / 3.1 (Suave / FPS Médio — AMD / Intel / GTX / RTX)</translation>
+        </message>
+        <message>
+            <source>Game's Built-in DLSS (Emulated — High Sharpness, Any GPU)</source>
+            <translation>DLSS do Jogo (Emulado — Alta Nitidez em Qualquer GPU)</translation>
+        </message>
+        <message>
+            <source>NVIDIA DLSS (RTX GPUs Only — Sharp &amp; Smooth on Tensor Cores)</source>
+            <translation>NVIDIA DLSS (Apenas GPUs RTX — Nítido e Suave nos Tensor Cores)</translation>
+        </message>
+        <message>
+            <source>Runs the Switch 2 game's own emulated DLSS network. Delivers high sharpness on any GPU (including GTX / AMD / Intel) with a small extra GPU cost (~5 FPS on 4 GB GPUs). Requires game restart.</source>
+            <translation>Usa a rede DLSS emulada do próprio jogo de Switch 2. Entrega ótima nitidez em qualquer GPU (inclusive GTX / AMD / Intel) com um pequeno custo extra de GPU (~5 FPS em GPUs de 4 GB). Requer reiniciar o jogo.</translation>
         </message>
     </context>
     <context>
@@ -6926,8 +6973,8 @@ Mensagem de Depuração: </translation>
             <translation>Coletando os shaders deste jogo (apenas uma vez, só um momento)...</translation>
         </message>
         <message>
-            <source>Building shaders %1 / %2 (just this once)</source>
-            <translation>Compilando shaders %1 / %2 (apenas desta vez)</translation>
+            <source>Building shaders %1 / %2 (Just this once — If you close, progress will continue from where it stopped.)</source>
+            <translation>Compilando shaders %1 / %2 (Apenas desta vez — Caso você feche, o progresso continuará de onde parou.)</translation>
         </message>
         <message>
             <source>Tip: Shaders, saves &amp; settings are saved in the 'user' folder — keep or copy 'user' when updating FritCheeLii so you never have to rebuild.</source>
@@ -8415,6 +8462,24 @@ O FritCheeLii será reiniciado agora para carregar o cache limpo.</translation>
             <source>Heavy Visual Add-On Active</source>
             <translation>Add-On Visual Pesado Ativo</translation>
         </message>
+        <message>
+            <source>Language / Idioma</source>
+            <translation>Idioma / Language</translation>
+        </message>
+        <message>
+            <source>Choose the language for FritCheeLii and The Legend of Zelda: Ocarina of Time.
+This sets both the emulator menus and the in-game language:</source>
+            <translation>Escolha o idioma do FritCheeLii e de The Legend of Zelda: Ocarina of Time.
+Isso define tanto os menus do emulador quanto o idioma dentro do jogo:</translation>
+        </message>
+        <message>
+            <source>Only if the game crashes or looks wrong because of it. FritCheeLii will restart automatically after clearing so the clean cache state is loaded.</source>
+            <translation>Apenas se o jogo travar ou ficar com gráficos errados por causa do cache. O FritCheeLii será reiniciado automaticamente após a limpeza.</translation>
+        </message>
+        <message>
+            <source>Delete &amp; Restart</source>
+            <translation>Limpar e Reiniciar</translation>
+        </message>
     </context>
     <context>
         <name>MigrationWorker</name>
@@ -8820,6 +8885,22 @@ p, li { white-space: pre-wrap; }
             <location filename="../../src/yuzu/render/performance_overlay.cpp" line="151" />
             <source>%1 ms</source>
             <translation type="unfinished" />
+        </message>
+        <message>
+            <source>WARMUP %1s</source>
+            <translation>AQUEC. %1s</translation>
+        </message>
+        <message>
+            <source>MOVE / ROTATE</source>
+            <translation>ANDE / GIRE</translation>
+        </message>
+        <message>
+            <source>BENCH %1s</source>
+            <translation>BENCH %1s</translation>
+        </message>
+        <message>
+            <source>RECORDING</source>
+            <translation>GRAVANDO</translation>
         </message>
     </context>
     <context>
@@ -9404,6 +9485,40 @@ p, li { white-space: pre-wrap; }
         <message>
             <source>Background Opacity</source>
             <translation>Opacidade do Fundo</translation>
+        </message>
+        <message>
+            <source>⏱  Record A/B Benchmark (30s Warmup + 30s CSV)</source>
+            <translation>⏱  Gravar Benchmark A/B (30s Aquec. + 30s CSV)</translation>
+        </message>
+        <message>
+            <source>⏱  Record A/B Benchmark (Instant 30s CSV)</source>
+            <translation>⏱  Gravar Benchmark A/B (30s Direto CSV)</translation>
+        </message>
+        <message>
+            <source>&lt;br&gt;&lt;b&gt;Multi-Save Slots found: %1&lt;/b&gt;</source>
+            <translation>&lt;br&gt;&lt;b&gt;Slots Multi-Save encontrados: %1&lt;/b&gt;</translation>
+        </message>
+        <message>
+            <source>ALL Multi-Save Slots (%1 populated — Import Slots 1–8)</source>
+            <translation>TODOS os Slots Multi-Save (%1 ocupados — Importar Slots 1–8)</translation>
+        </message>
+        <message>
+            <source>Import ALL %1 Multi-Save Slots (Slots 1–8) from %2 into FritCheeLii?</source>
+            <translation>Importar TODOS os %1 Slots Multi-Save (Slots 1–8) de %2 para o FritCheeLii?</translation>
+        </message>
+        <message>
+            <source>ALL Multi-Save Slots (%1 populated — Slots 1–8)</source>
+            <translation>TODOS os Slots Multi-Save (%1 ocupados — Slots 1–8)</translation>
+        </message>
+        <message>
+            <source>ALL Multi-Save Slots exported to:
+%1</source>
+            <translation>TODOS os Slots Multi-Save exportados para:
+%1</translation>
+        </message>
+        <message>
+            <source>To export ALL Multi-Save Slots (Slots 1–8) at once, please choose "Save as .zip backup file..." (other emulators only support 1 slot at a time).</source>
+            <translation>Para exportar TODOS os Slots Multi-Save (Slots 1–8) de uma vez, escolha "Save as .zip backup file..." (outros emuladores só suportam 1 slot por vez).</translation>
         </message>
     </context>
     <context>
@@ -10930,36 +11045,36 @@ Error code: %3</source>
     <context>
         <name>FritchiiUi::Home</name>
         <message>
-            <source>✔  Status: Extended Cache Built (30,000 / 121,364 shaders ready)</source>
-            <translation>✔  Status: Extended Cache Compilado (30.000 / 121.364 shaders prontos)</translation>
+            <source>✔  Status: Extended Cache Built (%1 / 121,364 shaders ready)</source>
+            <translation>✔  Status: Cache Estendido Compilado (%1 / 121.364 shaders prontos)</translation>
         </message>
         <message>
-            <source>✔  Status: Fast Essential Built (9,100 / 121,364 shaders ready to play!)</source>
-            <translation>✔  Status: Fast Essencial Compilado (9.100 / 121.364 shaders prontos para jogar!)</translation>
+            <source>✔  Status: Fast Essential Built (%1 / 121,364 shaders ready to play!)</source>
+            <translation>✔  Status: Fast Essencial Compilado (%1 / 121.364 shaders prontos para jogar!)</translation>
         </message>
         <message>
             <source>⚪  Status: Not pre-built yet (Fast Essential will run on first Play)</source>
             <translation>⚪  Status: Ainda não pré-compilado (o Fast Essencial rodará no primeiro Jogar)</translation>
         </message>
         <message>
-            <source>✔  Fast Essential (9,100 shaders — ~7.5%)  [BUILT / READY]</source>
-            <translation>✔  Fast Essencial (9.100 shaders — ~7,5%)  [CONCLUÍDO / PRONTO]</translation>
+            <source>✔  Fast Essential (%1 shaders — ~%2%)  [BUILT / READY]</source>
+            <translation>✔  Fast Essencial (%1 shaders — ~%2%)  [COMPILADO / PRONTO]</translation>
         </message>
         <message>
-            <source>▶  Fast Essential (9,100 shaders — ~7.5%)</source>
-            <translation>▶  Fast Essencial (9.100 shaders — ~7,5%)</translation>
+            <source>▶  Fast Essential (%1 shaders — ~%2%)</source>
+            <translation>▶  Fast Essencial (%1 shaders — ~%2%)</translation>
         </message>
         <message>
             <source>Real-gameplay Pareto shaders (8,342 graphics + 758 real compute). Best balance &amp;&amp; mandatory for Play.</source>
             <translation>Shaders reais de gameplay (Pareto: 8.342 gráficos + 758 compute reais). Melhor equilíbrio e obrigatório no Jogar.</translation>
         </message>
         <message>
-            <source>✔  Extended Cache (30,000 shaders — ~25%)  [BUILT / READY]</source>
-            <translation>✔  Extended Cache (30.000 shaders — ~25%)  [CONCLUÍDO / PRONTO]</translation>
+            <source>✔  Extended Cache (%1 shaders — ~25%)  [BUILT / READY]</source>
+            <translation>✔  Cache Estendido (%1 shaders — ~25%)  [COMPILADO / PRONTO]</translation>
         </message>
         <message>
-            <source>▶  Extended Cache (30,000 shaders — ~25%)</source>
-            <translation>▶  Extended Cache (30.000 shaders — ~25%)</translation>
+            <source>▶  Extended Cache (%1 shaders — ~25%)</source>
+            <translation>▶  Cache Estendido (%1 shaders — ~25%)</translation>
         </message>
         <message>
             <source>Real gameplay + top recipe shaders (29,242 graphics + 758 real compute) for late-game &amp;&amp; adult dungeons.</source>
@@ -10968,6 +11083,14 @@ Error code: %3</source>
         <message>
             <source>🗑  Clear Shader Cache  (Already Empty)</source>
             <translation>🗑  Limpar Shader Cache  (Já está limpo)</translation>
+        </message>
+        <message>
+            <source>Real-gameplay Pareto shaders (%1 graphics + %2 real compute). Best balance &amp; mandatory for Play.</source>
+            <translation>Shaders reais de gameplay (%1 gráficos + %2 compute reais). Melhor equilíbrio e obrigatório no Jogar.</translation>
+        </message>
+        <message>
+            <source>Real gameplay + top recipe shaders (%1 graphics + %2 real compute) for late-game &amp; adult dungeons.</source>
+            <translation>Gameplay real + principais shaders da recipe (%1 gráficos + %2 compute reais) para late-game e dungeons adulto.</translation>
         </message>
     </context>
 </TS>

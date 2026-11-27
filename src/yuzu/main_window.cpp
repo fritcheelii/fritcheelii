@@ -9,8 +9,14 @@
 #endif
 
 #include <cstdlib>
+#include <QComboBox>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QLabel>
+#include <QLocale>
 #include <QProcess>
 #include <QSysInfo>
+#include <QVBoxLayout>
 #include <boost/algorithm/string/split.hpp>
 #include "common/fs/path_util.h"
 #include "common/game_presets.h"
@@ -5028,6 +5034,65 @@ void MainWindow::OfferRecommendedSettings() {
         Settings::values.recommended_settings_prompt_shown.GetValue()) {
         return;
     }
+
+    // First-launch Language Selector (sets both Emulator UI & System/In-Game Language for OoT)
+    {
+        struct LangChoice {
+            const char* label;
+            const char* ui_code;
+            Settings::Language sys_lang;
+        };
+        static constexpr std::array<LangChoice, 10> kLangChoices{{
+            {"Português do Brasil", "pt_BR", Settings::Language::PortugueseBrazilian},
+            {"English (American)", "en", Settings::Language::EnglishAmerican},
+            {"Español (Latinoamérica)", "es", Settings::Language::SpanishLatin},
+            {"Español (España)", "es", Settings::Language::Spanish},
+            {"Français", "fr", Settings::Language::French},
+            {"Deutsch", "de", Settings::Language::German},
+            {"Italiano", "it", Settings::Language::Italian},
+            {"日本語 (Japanese)", "ja", Settings::Language::Japanese},
+            {"한국어 (Korean)", "ko", Settings::Language::Korean},
+            {"中文 (简体)", "zh_CN", Settings::Language::ChineseSimplified},
+        }};
+
+        QDialog lang_dlg(this);
+        lang_dlg.setWindowTitle(tr("Language / Idioma"));
+        lang_dlg.setWindowFlag(Qt::WindowContextHelpButtonHint, false);
+        lang_dlg.setMinimumWidth(420);
+        auto* v = new QVBoxLayout(&lang_dlg);
+        auto* msg = new QLabel(
+            tr("Choose the language for FritCheeLii and The Legend of Zelda: Ocarina of Time.\n"
+               "This sets both the emulator menus and the in-game language:"),
+            &lang_dlg);
+        msg->setWordWrap(true);
+        v->addWidget(msg);
+
+        auto* combo = new QComboBox(&lang_dlg);
+        const QString sys_locale = QLocale::system().name();
+        int default_idx = 1; // English (American)
+        for (size_t i = 0; i < kLangChoices.size(); ++i) {
+            combo->addItem(QString::fromUtf8(kLangChoices[i].label), static_cast<int>(i));
+            const QString ui_c = QString::fromLatin1(kLangChoices[i].ui_code);
+            if (sys_locale.compare(ui_c, Qt::CaseInsensitive) == 0 ||
+                (default_idx == 1 && sys_locale.startsWith(ui_c.left(2), Qt::CaseInsensitive))) {
+                default_idx = static_cast<int>(i);
+            }
+        }
+        combo->setCurrentIndex(default_idx);
+        v->addWidget(combo);
+
+        auto* btns = new QDialogButtonBox(QDialogButtonBox::Ok, &lang_dlg);
+        connect(btns, &QDialogButtonBox::accepted, &lang_dlg, &QDialog::accept);
+        v->addWidget(btns);
+
+        if (lang_dlg.exec() == QDialog::Accepted) {
+            const auto& chosen = kLangChoices[static_cast<size_t>(combo->currentData().toInt())];
+            Settings::values.language_index.SetValue(chosen.sys_lang);
+            OnLanguageChanged(QString::fromLatin1(chosen.ui_code));
+            OnSaveConfig();
+        }
+    }
+
     OnApplyRecommendedSettings();
 }
 

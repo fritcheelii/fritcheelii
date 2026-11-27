@@ -63,7 +63,7 @@ private:
     };
 
     struct Cell {
-        enum class Kind { Fps, Frame, Graph, CpuGpu, Status, Memory, Details };
+        enum class Kind { Fps, Frame, Bench, Graph, CpuGpu, Status, Memory, Details };
         Kind kind;
         int x;
         int width;
@@ -92,6 +92,9 @@ private:
     QString m_fps_detail;
     QString m_frame_text{QStringLiteral("-- ms")};
     QString m_low_text;
+    QString m_bench_title;
+    QString m_bench_sub;
+    bool m_bench_warming = false;
     QString m_upscale_text;
     QString m_frame_gen_text;
     QString m_ram_text;

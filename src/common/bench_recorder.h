@@ -58,12 +58,32 @@ public:
         return active.load(std::memory_order_relaxed);
     }
 
+    [[nodiscard]] bool IsWarmingUp() const noexcept {
+        if (!IsActive()) {
+            return false;
+        }
+        return std::chrono::steady_clock::now() < record_start_time;
+    }
+
+    [[nodiscard]] double WarmupRemainingSec() const noexcept {
+        if (!IsActive()) {
+            return 0.0;
+        }
+        const double rem = std::chrono::duration<double>(
+                               record_start_time - std::chrono::steady_clock::now())
+                               .count();
+        return rem > 0.0 ? rem : 0.0;
+    }
+
     [[nodiscard]] double ElapsedSec() const noexcept {
         if (!IsActive()) {
             return 0.0;
         }
         const auto now = std::chrono::steady_clock::now();
-        return std::chrono::duration<double>(now - start_time).count();
+        if (now < record_start_time) {
+            return 0.0;
+        }
+        return std::chrono::duration<double>(now - record_start_time).count();
     }
 
     [[nodiscard]] double RemainingSec() const noexcept {
@@ -71,13 +91,15 @@ public:
         return rem > 0.0 ? rem : 0.0;
     }
 
-    void Start(double duration_sec, std::string profile, std::filesystem::path out_dir) {
+    void Start(double duration_sec, std::string profile, std::filesystem::path out_dir,
+               double warmup_sec = 0.0) {
         std::scoped_lock lock{mutex};
         samples.clear();
         samples.reserve(static_cast<std::size_t>(duration_sec * 120.0));
         has_completed = false;
         completed_summary = {};
         target_duration_sec = duration_sec > 1.0 ? duration_sec : 30.0;
+        warmup_duration_sec = warmup_sec > 0.0 ? warmup_sec : 0.0;
         profile_tag = std::move(profile);
         output_dir = std::move(out_dir);
         frame_astc_us.store(0, std::memory_order_relaxed);
@@ -87,6 +109,9 @@ public:
         total_astc_calls_run = 0;
         total_readback_calls_run = 0;
         start_time = std::chrono::steady_clock::now();
+        record_start_time =
+            start_time + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                             std::chrono::duration<double>(warmup_duration_sec));
         active.store(true, std::memory_order_release);
     }
 
@@ -119,9 +144,12 @@ public:
         if (!active.load(std::memory_order_relaxed)) {
             return;
         }
+        const auto now = std::chrono::steady_clock::now();
+        if (now < record_start_time) {
+            return;
+        }
         const double elapsed_ms =
-            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time)
-                .count();
+            std::chrono::duration<double, std::milli>(now - record_start_time).count();
         samples.push_back(Sample{
             .elapsed_ms = elapsed_ms,
             .frametime_ms = frametime_ms,
@@ -141,9 +169,15 @@ public:
         if (!active.load(std::memory_order_relaxed)) {
             return;
         }
+        const auto now = std::chrono::steady_clock::now();
+        if (now < record_start_time && samples.empty()) {
+            active.store(false, std::memory_order_release);
+            has_completed = false;
+            return;
+        }
         const double elapsed_sec =
-            std::chrono::duration<double>(std::chrono::steady_clock::now() - start_time).count();
-        FinishLocked(elapsed_sec);
+            std::chrono::duration<double>(now - record_start_time).count();
+        FinishLocked(elapsed_sec > 0.0 ? elapsed_sec : 0.0);
     }
 
     bool TakeCompletedSummary(Summary& out) {
@@ -250,6 +284,8 @@ private:
 
     std::atomic<bool> active{false};
     std::chrono::steady_clock::time_point start_time{};
+    std::chrono::steady_clock::time_point record_start_time{};
+    double warmup_duration_sec = 0.0;
     double target_duration_sec = 30.0;
     std::string profile_tag;
     std::filesystem::path output_dir;

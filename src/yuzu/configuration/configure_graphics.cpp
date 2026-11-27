@@ -224,6 +224,7 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
     std::map<u32, QWidget*> hold_graphics;
     std::vector<QWidget*> hold_api;
     QCheckBox* frame_gen_checkbox = nullptr;
+    QComboBox* fg_type_combo = nullptr;
     QCheckBox* amd_fsr4_cb = nullptr;
     QCheckBox* nvidia_dlss_cb = nullptr;
     QCheckBox* game_dlss_cb = nullptr;
@@ -367,6 +368,9 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
         } else if (setting->Id() == Settings::values.frame_gen.Id()) {
             frame_gen_checkbox = widget->checkbox;
             hold_graphics.emplace(setting->Id(), widget);
+        } else if (setting->Id() == Settings::values.frame_gen_type.Id()) {
+            fg_type_combo = widget->combobox;
+            hold_graphics.emplace(setting->Id(), widget);
         } else {
             hold_graphics.emplace(setting->Id(), widget);
         }
@@ -418,30 +422,36 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
         auto* method_layout = new QBoxLayout(QBoxLayout::LeftToRight, method_row);
         method_layout->setContentsMargins(0, 0, 0, 0);
         auto* method_label = new QLabel(tr("Upscaling Method:"), method_row);
+        method_label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         auto* method_combo = new QComboBox(method_row);
+        method_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         enum UpscaleChoice {
             UpscaleNone = 0,
             UpscaleFsr4 = 1,
             UpscaleNvidiaDlss = 2,
             UpscaleGameDlss = 3,
         };
-        method_combo->addItem(tr("None — 3D Render Scale Only (Zero Extra VRAM / 4 GB)"),
+        method_combo->addItem(tr("None — 3D Render Scale Only (Sharpest / Highest FPS / 4 GB)"),
                               UpscaleNone);
         if (amd_fsr4_cb != nullptr) {
-            method_combo->addItem(tr("AMD FSR 4 / 3.1 (Temporal — 8 GB+ / Radeon)"), UpscaleFsr4);
+            method_combo->addItem(
+                tr("AMD FSR 4 / 3.1 (Smooth / Medium FPS — AMD / Intel / GTX / RTX)"),
+                UpscaleFsr4);
+        }
+        if (game_dlss_cb != nullptr) {
+            method_combo->addItem(
+                tr("Game's Built-in DLSS (Emulated — High Sharpness, Any GPU)"),
+                UpscaleGameDlss);
         }
 #ifdef EGLANTINE_STREAMLINE
         if (nvidia_dlss_cb != nullptr) {
-            method_combo->addItem(tr("NVIDIA DLSS (RTX GPUs Only — Experimental)"),
-                                  UpscaleNvidiaDlss);
+            method_combo->addItem(
+                tr("NVIDIA DLSS (RTX GPUs Only — Sharp & Smooth on Tensor Cores)"),
+                UpscaleNvidiaDlss);
         }
 #endif
-        if (game_dlss_cb != nullptr) {
-            method_combo->addItem(tr("Game's Built-in DLSS (Slow — Emulated)"), UpscaleGameDlss);
-        }
-        method_layout->addWidget(method_label);
-        method_layout->addStretch(1);
-        method_layout->addWidget(method_combo);
+        method_layout->addWidget(method_label, 1);
+        method_layout->addWidget(method_combo, 1);
         box_layout->addWidget(method_row);
 
 #ifdef EGLANTINE_STREAMLINE
@@ -481,8 +491,9 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
                 break;
             case UpscaleGameDlss:
                 upscale_hint->setText(
-                    tr("Runs the Switch 2 game's own emulated DLSS network (very heavy on GPU/VRAM). "
-                       "Requires game restart."));
+                    tr("Runs the Switch 2 game's own emulated DLSS network. Delivers high "
+                       "sharpness on any GPU (including GTX / AMD / Intel) with a small extra GPU "
+                       "cost (~5 FPS on 4 GB GPUs). Requires game restart."));
                 break;
             default:
                 upscale_hint->setText(
@@ -518,22 +529,7 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
         graphics_layout.addWidget(oot_scale_box);
     }
 
-    for (const auto& [id, widget] : hold_graphics) {
-        if (std::ranges::find(oot_scale_ids, id) == oot_scale_ids.end() &&
-            std::ranges::find(upscale_hidden_ids, id) == upscale_hidden_ids.end() &&
-            std::ranges::find(fg_ids, id) == fg_ids.end()) {
-            graphics_layout.addWidget(widget);
-        }
-    }
-
-    // Keep hidden settings widgets owned by graphics_layout so apply_funcs saves them cleanly.
-    for (QWidget* hidden_w : {amd_fsr4_w, nvidia_dlss_w, game_dlss_w, dump_flow_w}) {
-        if (hidden_w != nullptr) {
-            graphics_layout.addWidget(hidden_w);
-        }
-    }
-
-    // 2) Bottom box: Built-in Frame Generation (no external paid apps required)
+    // 2) Built-in Frame Generation (right below Upscaling & 3D Render Scale)
     QGroupBox* fg_box = nullptr;
     for (const u32 id : fg_ids) {
         const auto it = hold_graphics.find(id);
@@ -556,18 +552,49 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
     }
 
     // Hide rather than disable, a disabled widget would read as using the global value
-    if (frame_gen_checkbox != nullptr) {
-        for (const u32 id : {Settings::values.frame_gen_type.Id(),
-                             Settings::values.amd_frame_gen_version.Id(),
-                             Settings::values.frame_gen_multiplier.Id(),
-                             Settings::values.frame_gen_target_rate.Id(),
-                             Settings::values.frame_gen_flow_scale_auto.Id(),
-                             Settings::values.frame_gen_flow_scale.Id(),
-                             Settings::values.frame_gen_queue_target.Id()}) {
-            if (const auto it = hold_graphics.find(id); it != hold_graphics.end()) {
-                it->second->setVisible(frame_gen_checkbox->isChecked());
-                connect(frame_gen_checkbox, &QCheckBox::toggled, it->second, &QWidget::setVisible);
+    {
+        const auto update_fg_visibility = [frame_gen_checkbox, fg_type_combo, &hold_graphics]() {
+            const bool fg_on = frame_gen_checkbox == nullptr || frame_gen_checkbox->isChecked();
+            const bool is_amd_fsr =
+                fg_type_combo != nullptr &&
+                fg_type_combo->currentData().toInt() == static_cast<int>(Settings::FrameGenType::AmdFsr);
+            for (const u32 id : {Settings::values.frame_gen_type.Id(),
+                                 Settings::values.amd_frame_gen_version.Id(),
+                                 Settings::values.frame_gen_multiplier.Id(),
+                                 Settings::values.frame_gen_target_rate.Id(),
+                                 Settings::values.frame_gen_flow_scale_auto.Id(),
+                                 Settings::values.frame_gen_flow_scale.Id(),
+                                 Settings::values.frame_gen_queue_target.Id()}) {
+                if (const auto it = hold_graphics.find(id); it != hold_graphics.end()) {
+                    const bool visible =
+                        fg_on && (id != Settings::values.amd_frame_gen_version.Id() || is_amd_fsr);
+                    it->second->setVisible(visible);
+                }
             }
+        };
+        update_fg_visibility();
+        if (frame_gen_checkbox != nullptr) {
+            connect(frame_gen_checkbox, &QCheckBox::toggled, this,
+                    [update_fg_visibility](bool) { update_fg_visibility(); });
+        }
+        if (fg_type_combo != nullptr) {
+            connect(fg_type_combo, qOverload<int>(&QComboBox::currentIndexChanged), this,
+                    [update_fg_visibility](int) { update_fg_visibility(); });
+        }
+    }
+
+    for (const auto& [id, widget] : hold_graphics) {
+        if (std::ranges::find(oot_scale_ids, id) == oot_scale_ids.end() &&
+            std::ranges::find(upscale_hidden_ids, id) == upscale_hidden_ids.end() &&
+            std::ranges::find(fg_ids, id) == fg_ids.end()) {
+            graphics_layout.addWidget(widget);
+        }
+    }
+
+    // Keep hidden settings widgets owned by graphics_layout so apply_funcs saves them cleanly.
+    for (QWidget* hidden_w : {amd_fsr4_w, nvidia_dlss_w, game_dlss_w, dump_flow_w}) {
+        if (hidden_w != nullptr) {
+            graphics_layout.addWidget(hidden_w);
         }
     }
 

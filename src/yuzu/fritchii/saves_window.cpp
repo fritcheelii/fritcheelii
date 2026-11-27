@@ -575,14 +575,51 @@ struct DetectedSaveSource {
     QString name;
     fs::path oot_dir;
     fs::path emu_save_root;
+    fs::path slots_dir;
     bool is_triforce = false;
     OotSaveSummary summary;
 };
+
+int CountPopulatedMultiSlots(const fs::path& slots_dir) {
+    std::error_code ec;
+    if (slots_dir.empty() || !fs::is_directory(slots_dir, ec)) {
+        return 0;
+    }
+    int count = 0;
+    for (int i = 1; i <= 8; ++i) {
+        if (DirHasFiles(slots_dir / fmt::format("slot_{}", i) / "data")) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+fs::path FindFritCheeLiiSlotsDir(const fs::path& candidate_root, const fs::path& self_slots_root) {
+    if (candidate_root.empty()) {
+        return {};
+    }
+    const std::string self_norm = LowerNormPath(self_slots_root);
+    for (const fs::path& cand : {
+             candidate_root / "save-slots" / OOT_TITLE_HEX,
+             candidate_root / "user" / "save-slots" / OOT_TITLE_HEX,
+             candidate_root.parent_path().parent_path() / "save-slots" / OOT_TITLE_HEX,
+             candidate_root.parent_path().parent_path().parent_path() / "save-slots" / OOT_TITLE_HEX,
+         }) {
+        if (LowerNormPath(cand) == self_norm) {
+            continue;
+        }
+        if (CountPopulatedMultiSlots(cand) > 0) {
+            return cand;
+        }
+    }
+    return {};
+}
 
 std::vector<DetectedSaveSource> DetectAllOotSaves(const fs::path& fritchii_save_root) {
     std::vector<DetectedSaveSource> out;
     std::set<std::string> seen;
 
+    const fs::path self_slots_root = OotSlotsRoot(fritchii_save_root);
     const std::string self_root = LowerNormPath(fritchii_save_root);
     const std::string self_oot = LowerNormPath(OotActiveNandDir(fritchii_save_root));
     seen.insert(self_root);
@@ -606,13 +643,14 @@ std::vector<DetectedSaveSource> DetectAllOotSaves(const fs::path& fritchii_save_
         if (!oot_dir.empty() && fs::is_directory(oot_dir, ec)) {
             sum = InspectOotSaveDir(oot_dir, true);
         }
-        if (!sum.has_data && emu_root.empty()) {
+        const fs::path slots_dir = FindFritCheeLiiSlotsDir(emu_root, self_slots_root);
+        if (!sum.has_data && emu_root.empty() && slots_dir.empty()) {
             return;
         }
-        if (!sum.has_data && Profiles(emu_root).empty()) {
+        if (!sum.has_data && Profiles(emu_root).empty() && slots_dir.empty()) {
             return;
         }
-        out.push_back({name, oot_dir, emu_root, is_triforce, std::move(sum)});
+        out.push_back({name, oot_dir, emu_root, slots_dir, is_triforce, std::move(sum)});
     };
 
     struct EmuEntry {
@@ -1270,6 +1308,13 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
         v->addWidget(new QLabel(QObject::tr("Which FritCheeLii save to export:"), &pick));
         auto* src_combo = new QComboBox(&pick);
         const fs::path active_oot = OotActiveNandDir(fritchii);
+        const int populated_slots = CountPopulatedMultiSlots(slots_root);
+        if (populated_slots > 0) {
+            src_combo->addItem(
+                QObject::tr("ALL Multi-Save Slots (%1 populated — Slots 1–8)")
+                    .arg(populated_slots),
+                -1);
+        }
         if (DirHasFiles(active_oot)) {
             src_combo->addItem(
                 QObject::tr("Active Campaign (Current Slot %1)").arg(active), 0);
@@ -1342,6 +1387,22 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                 if (file.isEmpty()) {
                     return;
                 }
+                if (src_slot == -1) {
+                    if (DirHasFiles(active_oot)) {
+                        const fs::path active_dir = slots_root / fmt::format("slot_{}", active);
+                        SyncDirCopy(active_oot, active_dir / "data");
+                        WriteActiveSlot(slots_root, active);
+                    }
+                    if (!JlCompress::compressDir(file, Text(slots_root), true)) {
+                        QMessageBox::warning(&dialog, QObject::tr("Saves"),
+                                             QObject::tr("Could not write %1").arg(file));
+                        return;
+                    }
+                    QMessageBox::information(
+                        &dialog, QObject::tr("Saves"),
+                        QObject::tr("ALL Multi-Save Slots exported to:\n%1").arg(file));
+                    return;
+                }
                 const fs::path zip_src =
                     (src_slot == 0 && !DirHasFiles(src_oot)) ? fritchii : src_oot;
                 if (!JlCompress::compressDir(file, Text(zip_src), true)) {
@@ -1351,6 +1412,13 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                 }
                 QMessageBox::information(&dialog, QObject::tr("Saves"),
                                          QObject::tr("Saves exported to:\n%1").arg(file));
+            } else if (src_slot == -1) {
+                QMessageBox::information(
+                    &dialog, QObject::tr("Saves"),
+                    QObject::tr("To export ALL Multi-Save Slots (Slots 1–8) at once, please choose "
+                                "\"Save as .zip backup file...\" (other emulators only support 1 "
+                                "slot at a time)."));
+                return;
             } else if (choice.typeId() == QMetaType::QString &&
                        choice.toString() == QStringLiteral("folder")) {
                 const QString dir = QFileDialog::getExistingDirectory(
@@ -1515,10 +1583,17 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
         imp_preview_row->addWidget(imp_info, 1);
         v->addWidget(imp_preview_box);
 
+        v->addWidget(new QLabel(QObject::tr("Import into:"), &pick));
+        auto* dst_slot_combo = new QComboBox(&pick);
+
         const auto update_import_preview = [&] {
             const QVariant cur = combo->currentData();
+            bool has_multi_slots = false;
+            int multi_slot_count = 0;
             if (cur.typeId() == QMetaType::Int) {
                 const auto& d = detected[static_cast<size_t>(cur.toInt())];
+                multi_slot_count = CountPopulatedMultiSlots(d.slots_dir);
+                has_multi_slots = multi_slot_count > 0;
                 imp_preview_box->setVisible(true);
                 if (!d.summary.preview.isNull()) {
                     imp_thumb->setText(QString{});
@@ -1528,28 +1603,38 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                     imp_thumb->setText(QObject::tr("No preview"));
                 }
                 const fs::path shown_path = !d.oot_dir.empty() ? d.oot_dir : d.emu_save_root;
+                const QString slots_note =
+                    has_multi_slots
+                        ? QObject::tr("<br><b>Multi-Save Slots found: %1</b>").arg(multi_slot_count)
+                        : QString{};
                 imp_info->setText(
-                    QObject::tr("<b>%1</b><br>%2 / 6 files<br>Saved: %3<br><span style='color:#7c7c8a'>%4</span>")
+                    QObject::tr("<b>%1</b><br>%2 / 6 files%3<br>Saved: %4<br><span style='color:#7c7c8a'>%5</span>")
                         .arg(d.name)
                         .arg(d.summary.used_files)
+                        .arg(slots_note)
                         .arg(FormatSaveDate(d.summary.newest_time))
                         .arg(Text(shown_path)));
             } else {
                 imp_preview_box->setVisible(false);
             }
+
+            dst_slot_combo->clear();
+            if (has_multi_slots) {
+                dst_slot_combo->addItem(
+                    QObject::tr("ALL Multi-Save Slots (%1 populated — Import Slots 1–8)")
+                        .arg(multi_slot_count),
+                    -1);
+            }
+            dst_slot_combo->addItem(
+                QObject::tr("Active Campaign (Current Slot %1)").arg(active), 0);
+            for (int i = 1; i <= 8; ++i) {
+                const SlotMeta sm = ReadSlotMeta(slots_root / fmt::format("slot_{}", i), i);
+                dst_slot_combo->addItem(QObject::tr("Slot %1 — %2").arg(i).arg(sm.name), i);
+            }
         };
         QObject::connect(combo, &QComboBox::currentIndexChanged, &pick,
                          [&](int) { update_import_preview(); });
         update_import_preview();
-
-        v->addWidget(new QLabel(QObject::tr("Import into:"), &pick));
-        auto* dst_slot_combo = new QComboBox(&pick);
-        dst_slot_combo->addItem(
-            QObject::tr("Active Campaign (Current Slot %1)").arg(active), 0);
-        for (int i = 1; i <= 8; ++i) {
-            const SlotMeta sm = ReadSlotMeta(slots_root / fmt::format("slot_{}", i), i);
-            dst_slot_combo->addItem(QObject::tr("Slot %1 — %2").arg(i).arg(sm.name), i);
-        }
         v->addWidget(dst_slot_combo);
 
         auto* btns = new QHBoxLayout;
@@ -1568,6 +1653,44 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
         const QVariant choice = combo->currentData();
         const int target_slot = dst_slot_combo->currentData().toInt();
         const fs::path temp = fritchii.parent_path().parent_path() / "save-import";
+
+        const auto apply_multi_slots_import = [&](const fs::path& src_slots, const QString& label) {
+            const int src_count = CountPopulatedMultiSlots(src_slots);
+            if (src_count <= 0) {
+                return false;
+            }
+            const auto backup_path = BackupPath(fritchii);
+            if (!confirm(QObject::tr("Import ALL %1 Multi-Save Slots (Slots 1–8) from %2 into "
+                                     "FritCheeLii?")
+                             .arg(src_count)
+                             .arg(label),
+                         backup_path)) {
+                return true;
+            }
+            const auto backup = Backup(fritchii, backup_path);
+            int copied = 0;
+            for (int i = 1; i <= 8; ++i) {
+                const fs::path src_sdir = src_slots / fmt::format("slot_{}", i);
+                const fs::path src_sdata = src_sdir / "data";
+                if (!DirHasFiles(src_sdata)) {
+                    continue;
+                }
+                const fs::path dst_sdir = slots_root / fmt::format("slot_{}", i);
+                SyncDirCopy(src_sdata, dst_sdir / "data");
+                const SlotMeta sm = ReadSlotMeta(src_sdir, i);
+                WriteSlotMeta(dst_sdir, sm.name, sm.updated);
+                ++copied;
+            }
+            const int src_active = ReadActiveSlot(src_slots);
+            if (DirHasFiles(slots_root / fmt::format("slot_{}", src_active) / "data")) {
+                WriteActiveSlot(slots_root, src_active);
+                SyncDirCopy(slots_root / fmt::format("slot_{}", src_active) / "data",
+                            OotActiveNandDir(fritchii));
+            }
+            refresh_slots();
+            Done(&dialog, copied, backup);
+            return true;
+        };
 
         const auto apply_oot_import = [&](const fs::path& src_oot, const QString& label) {
             const QString stamp =
@@ -1630,6 +1753,15 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                 if (JlCompress::extractDir(file, Text(temp)).isEmpty()) {
                     throw std::runtime_error("the zip file is empty or can't be read");
                 }
+                const fs::path zip_slots =
+                    CountPopulatedMultiSlots(temp) > 0
+                        ? temp
+                        : FindFritCheeLiiSlotsDir(temp, slots_root);
+                if (!zip_slots.empty()) {
+                    apply_multi_slots_import(zip_slots, QObject::tr("the .zip file"));
+                    fs::remove_all(temp);
+                    return;
+                }
                 if (const fs::path oot_in_zip = FindOotSaveIn(temp); !oot_in_zip.empty()) {
                     apply_oot_import(oot_in_zip, QObject::tr("the .zip file"));
                     fs::remove_all(temp);
@@ -1662,6 +1794,12 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                     return;
                 }
                 const fs::path picked = fs::u8path(dir.toStdString());
+                if (const fs::path picked_slots = FindFritCheeLiiSlotsDir(picked, slots_root);
+                    !picked_slots.empty() && CountPopulatedMultiSlots(picked_slots) > 1) {
+                    if (apply_multi_slots_import(picked_slots, Text(picked))) {
+                        return;
+                    }
+                }
                 if (const fs::path oot_found = FindOotSaveIn(picked); !oot_found.empty()) {
                     apply_oot_import(oot_found, Text(oot_found));
                     return;
@@ -1693,7 +1831,9 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                 Done(&dialog, games, backup);
             } else {
                 const DetectedSaveSource& source = detected[static_cast<size_t>(choice.toInt())];
-                if (!source.oot_dir.empty()) {
+                if (target_slot == -1 && !source.slots_dir.empty()) {
+                    apply_multi_slots_import(source.slots_dir, source.name);
+                } else if (!source.oot_dir.empty()) {
                     apply_oot_import(source.oot_dir, source.name);
                 } else if (!source.emu_save_root.empty() && !Profiles(source.emu_save_root).empty()) {
                     const auto backup_path = BackupPath(fritchii);

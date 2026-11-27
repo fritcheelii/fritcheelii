@@ -19,6 +19,7 @@
 #include <QStringList>
 #include <QWindow>
 
+#include "common/bench_recorder.h"
 #include "common/logging.h"
 #include "common/memory_detect.h"
 #include "common/settings.h"
@@ -42,7 +43,7 @@ constexpr int HeaderHeight = 14;
 constexpr int Edge = 5;    // the gold edge on the left
 constexpr int Pad = 12;    // around the cells
 constexpr int Gap = 14;    // between cells, with a hairline in the middle
-constexpr int Margin = 6;  // from the game picture's border, in a corner
+constexpr int Margin = 0;  // flush against the game picture's border in a corner
 constexpr int Snap = 18;   // how near a border the dragged bar jumps to it
 constexpr int GraphWidth = 112;
 
@@ -568,6 +569,12 @@ void PerformanceOverlay::Relayout() {
     add(Cell::Kind::Frame, std::max({value.horizontalAdvance(QStringLiteral("000.0 ms")),
                                      value.horizontalAdvance(m_frame_text),
                                      label.horizontalAdvance(m_low_text)}));
+    if (!m_bench_title.isEmpty()) {
+        add(Cell::Kind::Bench,
+            std::max({value.horizontalAdvance(QStringLiteral("WARMUP 30s")),
+                      value.horizontalAdvance(m_bench_title),
+                      label.horizontalAdvance(m_bench_sub)}));
+    }
     if (!compact) {
         if (ui.perf_overlay_graph.GetValue()) {
             add(Cell::Kind::Graph, GraphWidth);
@@ -705,6 +712,24 @@ void PerformanceOverlay::UpdateStats(const Core::PerfStatsResults& results,
     }
     if (!std::isnan(results.frametime)) {
         m_frame_text = tr("%1 ms").arg(results.frametime * 1000.0, 0, 'f', 1);
+    }
+    {
+        const auto& bench = Common::BenchRecorder::Instance();
+        if (bench.IsWarmingUp()) {
+            const int rem = static_cast<int>(std::ceil(bench.WarmupRemainingSec()));
+            m_bench_warming = true;
+            m_bench_title = tr("WARMUP %1s").arg(rem);
+            m_bench_sub = tr("MOVE / ROTATE");
+        } else if (bench.IsActive()) {
+            const int rem = static_cast<int>(std::ceil(bench.RemainingSec()));
+            m_bench_warming = false;
+            m_bench_title = tr("BENCH %1s").arg(rem);
+            m_bench_sub = tr("RECORDING");
+        } else {
+            m_bench_warming = false;
+            m_bench_title.clear();
+            m_bench_sub.clear();
+        }
     }
     m_upscale_text = m_main_window->UpscaleStatusText();
     m_frame_gen_text = m_main_window->FrameGenStatusText();
@@ -907,6 +932,14 @@ void PerformanceOverlay::paintEvent(QPaintEvent*) {
             painter.setFont(m_label);
             painter.setPen(Dim);
             painter.drawText(cell.x, row2, m_low_text.isEmpty() ? tr("FRAME TIME") : m_low_text);
+            break;
+        case Cell::Kind::Bench:
+            painter.setFont(m_value);
+            painter.setPen(m_bench_warming ? Slow : Bad);
+            painter.drawText(cell.x, row1, m_bench_title);
+            painter.setFont(m_label);
+            painter.setPen(Dim);
+            painter.drawText(cell.x, row2, m_bench_sub);
             break;
         case Cell::Kind::Graph: {
             // One bar per half second, newest on the right; a dip stands out in orange or red.

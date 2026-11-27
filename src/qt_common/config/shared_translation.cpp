@@ -268,16 +268,20 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
               "while HDR output is active."));
     INSERT(Settings, frame_gen_type, tr("Frame Generation Type"),
            tr("Optical Flow: 100% built-in, light, works on any GPU (GTX/RTX/AMD/Intel).\n"
-              "AMD FSR 3 Frame Gen: uses real game motion vectors (best free quality for AMD / "
-              "RTX 20–30 / Intel, 6–8 GB+ VRAM)."));
+              "AMD FSR 3 Frame Gen: uses real game motion vectors (AMD / RTX 20–30 / Intel, 6–8 GB+ VRAM).\n"
+              "NVIDIA DLSS Frame Gen: RTX 40/50 Tensor Cores (automatically falls back to Optical Flow on other GPUs)."));
     INSERT(Settings, amd_frame_gen_version, tr("AMD Frame Generation Version"),
            tr("Auto picks FSR 4 on RX 9000 and FSR 3.1 on all other GPUs. Requires restart."));
-    INSERT(Settings, frame_gen_multiplier, tr("Frame Generation Multiplier"), QString());
+    INSERT(Settings, frame_gen_multiplier, tr("Frame Generation Multiplier"),
+           tr("Total frames shown per real game frame (2 = doubles visual FPS). Recommended: 2."));
     INSERT(Settings, frame_gen_target_rate, tr("Target Frame Rate"),
-           tr("Target FPS for frame generation. AMD FSR always doubles the game's frame rate."));
-    INSERT(Settings, frame_gen_flow_scale_auto, tr("Auto Flow Scale"), QString());
-    INSERT(Settings, frame_gen_flow_scale, tr("Flow Scale"), QString());
-    INSERT(Settings, frame_gen_queue_target, tr("Queue Target"), QString());
+           tr("0 = fixed multiplier above. Set a target (e.g. 60) to generate frames adaptively up to that FPS. AMD FSR and DLSS-G always use 2x."));
+    INSERT(Settings, frame_gen_flow_scale_auto, tr("Auto Flow Scale"),
+           tr("Automatically chooses the internal motion-estimation resolution for Optical Flow based on screen resolution. Recommended: ON."));
+    INSERT(Settings, frame_gen_flow_scale, tr("Flow Scale"),
+           tr("Manual motion-estimation resolution when Auto Flow Scale is OFF. Higher = fewer artifacts on small objects; lower (50%) = lighter on 4 GB GPUs."));
+    INSERT(Settings, frame_gen_queue_target, tr("Queue Target"),
+           tr("Extra frames queued before presentation. 0 = lowest input lag (recommended); 1–2 = smoother pacing with slightly higher latency."));
     INSERT(Settings, frame_gen_dump_flow, tr("Dump Optical Flow"), QString());
 
     // Renderer (Advanced Graphics)
@@ -613,7 +617,7 @@ std::unique_ptr<ComboboxTranslationMap> ComboboxEnumeration(QObject* parent) {
                               PAIR(FrameGenType, AmdFsr,
                                    tr("AMD FSR 3 Frame Gen (AMD / RTX 20–30 / Intel — 6–8 GB+)")),
 #endif
-#ifdef EGLANTINE_STREAMLINE
+#ifdef _WIN32
                               PAIR(FrameGenType, NvidiaDlssG,
                                    tr("NVIDIA DLSS Frame Gen (RTX 40 / 50 Only — Experimental)")),
 #endif

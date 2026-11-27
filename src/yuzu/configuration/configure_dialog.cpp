@@ -233,63 +233,7 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
     }
     ui->tabWidget->addTab(graphics_extra_plus_tab.get(), tr("Extra+"));
 
-    // FritCheeLii Test Lab (experimental A/B switches, OFF by default)
-    graphics_test_tab = std::make_unique<QWidget>(this);
-    graphics_test_tab->setAccessibleName(tr("Test"));
-    {
-        auto* outer = new QVBoxLayout(graphics_test_tab.get());
-        outer->setContentsMargins(0, 0, 0, 0);
-        auto* scroll = new QScrollArea(graphics_test_tab.get());
-        scroll->setWidgetResizable(true);
-        scroll->setFrameShape(QFrame::NoFrame);
-        auto* content = new QWidget(scroll);
-        auto* v = new QVBoxLayout(content);
-        v->setSpacing(8);
-
-        auto* info = new QLabel(
-            tr("FritCheeLii Test Lab — new A/B experimental switches (all start OFF).\n"
-               "Previously verified switches were promoted to Graphics > Extra+. "
-               "Use the 30s Benchmark Recorder to measure impact before promoting."),
-            content);
-        info->setWordWrap(true);
-        v->addWidget(info);
-
-        auto add_test_switch = [&](const QString& title, const QString& desc, bool checked) {
-            auto* cb = new QCheckBox(title, content);
-            cb->setChecked(checked);
-            auto* note = new QLabel(desc, content);
-            note->setWordWrap(true);
-            note->setContentsMargins(24, 0, 0, 4);
-            note->setStyleSheet(QStringLiteral("color: #9a9aa8; font-size: 11px;"));
-            v->addWidget(cb);
-            v->addWidget(note);
-            return cb;
-        };
-
-        auto* cb_ubo_16k = add_test_switch(
-            tr("16 KiB Bone Palette UBO Streaming (Fritchii v6.5 EXP116)"),
-            tr("Raises Vulkan uniform stream reuse cap from 4 KiB to 16 KiB so Ocarina of Time's "
-               "7–13 KiB skinned bone palettes reuse stream allocations instead of hitting cached "
-               "buffers. Requires game restart."),
-            Settings::values.test_ubo_16k_stream.GetValue());
-
-        auto* cb_mem_prio = add_test_switch(
-            tr("VRAM Memory Priority — Render Targets First (Longshot)"),
-            tr("Uses VK_EXT_memory_priority to assign high residency priority (1.0) to render "
-               "targets and low priority (0.25) to sampled textures so Windows keeps framebuffers "
-               "in fast VRAM under memory pressure. Requires game restart."),
-            Settings::values.test_vram_memory_priority.GetValue());
-
-        v->addStretch(1);
-        scroll->setWidget(content);
-        outer->addWidget(scroll);
-
-        apply_graphics_test = [cb_ubo_16k, cb_mem_prio]() {
-            Settings::values.test_ubo_16k_stream.SetValue(cb_ubo_16k->isChecked());
-            Settings::values.test_vram_memory_priority.SetValue(cb_mem_prio->isChecked());
-        };
-    }
-    ui->tabWidget->addTab(graphics_test_tab.get(), tr("Test"));
+    // Test tab removed for v6.2 (EXP116 and VRAM Memory Priority were proven neutral/inferior in A/B tests).
     ui->tabWidget->addTab(hotkeys_tab.get(), tr("Hotkeys"));
     ui->tabWidget->addTab(input_tab.get(), tr("Controls"));
     ui->tabWidget->addTab(profile_tab.get(), tr("Profiles"));
@@ -375,9 +319,6 @@ void ConfigureDialog::ApplyConfiguration() {
     if (apply_graphics_extra_plus) {
         apply_graphics_extra_plus();
     }
-    if (apply_graphics_test) {
-        apply_graphics_test();
-    }
     audio_tab->ApplyConfiguration();
     debug_tab_tab->ApplyConfiguration();
     web_tab->ApplyConfiguration();
@@ -425,7 +366,7 @@ void ConfigureDialog::PopulateSelectionList() {
          {tr("CPU"), {cpu_tab.get()}},
          {tr("Graphics"),
           {graphics_tab.get(), graphics_advanced_tab.get(), graphics_extensions_tab.get(),
-           graphics_extra_plus_tab.get(), graphics_test_tab.get()}},
+           graphics_extra_plus_tab.get()}},
          {tr("Audio"), {audio_tab.get()}},
          {tr("Controls"), input_tab->GetSubTabs()}},
     };

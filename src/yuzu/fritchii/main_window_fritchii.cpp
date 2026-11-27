@@ -51,18 +51,15 @@ void MainWindow::SetUpFritchiiUi() {
                         program_id == OcarinaOfTime ? tr("Delete OoT's shader cache?")
                                                     : tr("Delete this game's shader cache?"),
                         QMessageBox::NoButton, this);
-        box.setInformativeText(tr("Only if the game crashes or looks wrong because of it. The "
-                                  "shaders are prepared again on the next start."));
-        QPushButton* remove = box.addButton(tr("Delete"), QMessageBox::DestructiveRole);
+        box.setInformativeText(tr("Only if the game crashes or looks wrong because of it. "
+                                  "FritCheeLii will restart automatically after clearing so the "
+                                  "clean cache state is loaded."));
+        QPushButton* remove = box.addButton(tr("Delete && Restart"), QMessageBox::DestructiveRole);
         box.setDefaultButton(box.addButton(QMessageBox::Cancel));
         box.exec();
         if (box.clickedButton() == remove) {
             QtCommon::Game::RemoveAllTransferableShaderCaches(program_id);
             QtCommon::Game::RemoveVulkanDriverPipelineCache(program_id);
-            QMessageBox::information(
-                this, title,
-                tr("Shader cache cleared.\n\nFritCheeLii will now restart to load the clean "
-                   "cache state."));
             QProcess::startDetached(QCoreApplication::applicationFilePath(), {});
             QCoreApplication::quit();
         }
@@ -142,7 +139,10 @@ void MainWindow::SetUpFritchiiUi() {
            "FPS graph, RAM/VRAM, CPU Single-Core / GPU W & °C, and hardware banner."));
     const auto update_overlay_btn = [overlay_button, this]() {
         auto& bench = Common::BenchRecorder::Instance();
-        if (bench.IsActive()) {
+        if (bench.IsWarmingUp()) {
+            const int rem = static_cast<int>(std::ceil(bench.WarmupRemainingSec()));
+            overlay_button->setText(QStringLiteral("WARM %1s").arg(rem));
+        } else if (bench.IsActive()) {
             const int rem = static_cast<int>(std::ceil(bench.RemainingSec()));
             overlay_button->setText(QStringLiteral("REC %1s").arg(rem));
         } else {
@@ -227,79 +227,74 @@ void MainWindow::SetUpFritchiiUi() {
                 update_overlay_btn();
             });
         } else {
-            menu.addAction(QObject::tr("⏱  Record A/B Benchmark (30s CSV)"),
-                           [bench_timer, update_overlay_btn] {
-                               const auto flag = [](const char* name, bool on) {
-                                   return std::string(name) + (on ? "=ON" : "=OFF");
-                               };
-                               const auto scale_str = []() -> std::string {
-                                   switch (Settings::values.oot_fsr_preset.GetValue()) {
-                                   case Settings::OotFsrPreset::Native:
-                                       return "Native";
-                                   case Settings::OotFsrPreset::Quality:
-                                       return "67%";
-                                   case Settings::OotFsrPreset::Balanced:
-                                       return "59%";
-                                   case Settings::OotFsrPreset::Performance:
-                                       return "50%";
-                                   case Settings::OotFsrPreset::UltraPerformance:
-                                       return "33%";
-                                   case Settings::OotFsrPreset::NativeAa:
-                                       return "NativeAA";
-                                   }
-                                   return "?";
-                               };
-                               const auto aa_str = []() -> std::string {
-                                   switch (Settings::values.anti_aliasing.GetValue()) {
-                                   case Settings::AntiAliasing::None:
-                                       return "None";
-                                   case Settings::AntiAliasing::Fxaa:
-                                       return "FXAA";
-                                   case Settings::AntiAliasing::Smaa:
-                                       return "SMAA";
-                                   default:
-                                       return "Other";
-                                   }
-                               };
-                               const std::string tag =
-                                   "Scale=" + scale_str() + "|AA=" + aa_str() + "|" +
-                                   flag("FastASTC", Settings::values.test_fast_astc_decoder.GetValue()) +
-                                   "|" +
-                                   flag("ByteRB", Settings::values.test_exact_byte_readback.GetValue()) +
-                                   "|" +
-                                   flag("OcclOff", Settings::values.test_occlusion_off.GetValue()) +
-                                   "|" + flag("MipCap", Settings::values.test_4k_mip_cap.GetValue()) +
-                                   "|" +
-                                   flag("VramGC4G", Settings::values.test_vram_gc_4gb.GetValue()) +
-                                   "|" +
-                                   flag("Tidy1s", Settings::values.test_tex_tidy_1s.GetValue()) +
-                                   "|" +
-                                   flag("Shadow64", Settings::values.test_shadow_size_steps.GetValue()) +
-                                   "|" +
-                                   flag("Poll", Settings::values.test_poll_backoff.GetValue()) +
-                                   "|" +
-                                   flag("Hold2s", Settings::values.test_changebank_hold.GetValue()) +
-                                   "|" +
-                                   flag("JitWarm", Settings::values.test_jit_block_warmup.GetValue()) +
-                                   "|" +
-                                   flag("HostZstd", Settings::values.test_host_zstd.GetValue()) +
-                                   "|" +
-                                   flag("CrashSkip",
-                                        Settings::values.test_precache_crash_skip.GetValue()) +
-                                   "|" +
-                                   flag("UboMiss", Settings::values.test_ubo_miss_bypass.GetValue()) +
-                                   "|" +
-                                   flag("Ubo16K", Settings::values.test_ubo_16k_stream.GetValue()) +
-                                   "|" +
-                                   flag("MemPrio",
-                                        Settings::values.test_vram_memory_priority.GetValue());
-                               Common::BenchRecorder::Instance().Start(
-                                   30.0, tag,
-                                   Common::FS::GetEdenPath(Common::FS::EdenPath::EdenDir) /
-                                       "benchmarks");
-                               bench_timer->start();
-                               update_overlay_btn();
-                           });
+            const auto start_bench = [this, bench_timer, update_overlay_btn](double warmup_sec) {
+                const auto flag = [](const char* name, bool on) {
+                    return std::string(name) + (on ? "=ON" : "=OFF");
+                };
+                const auto scale_str = []() -> std::string {
+                    switch (Settings::values.oot_fsr_preset.GetValue()) {
+                    case Settings::OotFsrPreset::Native:
+                        return "Native";
+                    case Settings::OotFsrPreset::Quality:
+                        return "67%";
+                    case Settings::OotFsrPreset::Balanced:
+                        return "59%";
+                    case Settings::OotFsrPreset::Performance:
+                        return "50%";
+                    case Settings::OotFsrPreset::UltraPerformance:
+                        return "33%";
+                    case Settings::OotFsrPreset::NativeAa:
+                        return "NativeAA";
+                    }
+                    return "?";
+                };
+                const auto aa_str = []() -> std::string {
+                    switch (Settings::values.anti_aliasing.GetValue()) {
+                    case Settings::AntiAliasing::None:
+                        return "None";
+                    case Settings::AntiAliasing::Fxaa:
+                        return "FXAA";
+                    case Settings::AntiAliasing::Smaa:
+                        return "SMAA";
+                    default:
+                        return "Other";
+                    }
+                };
+                const std::string tag =
+                    "Scale=" + scale_str() + "|AA=" + aa_str() + "|" +
+                    flag("FastASTC", Settings::values.test_fast_astc_decoder.GetValue()) + "|" +
+                    flag("ByteRB", Settings::values.test_exact_byte_readback.GetValue()) + "|" +
+                    flag("OcclOff", Settings::values.test_occlusion_off.GetValue()) + "|" +
+                    flag("MipCap", Settings::values.test_4k_mip_cap.GetValue()) + "|" +
+                    flag("VramGC4G", Settings::values.test_vram_gc_4gb.GetValue()) + "|" +
+                    flag("Tidy1s", Settings::values.test_tex_tidy_1s.GetValue()) + "|" +
+                    flag("Shadow64", Settings::values.test_shadow_size_steps.GetValue()) + "|" +
+                    flag("Poll", Settings::values.test_poll_backoff.GetValue()) + "|" +
+                    flag("Hold2s", Settings::values.test_changebank_hold.GetValue()) + "|" +
+                    flag("JitWarm", Settings::values.test_jit_block_warmup.GetValue()) + "|" +
+                    flag("HostZstd", Settings::values.test_host_zstd.GetValue()) + "|" +
+                    flag("CrashSkip", Settings::values.test_precache_crash_skip.GetValue()) + "|" +
+                    flag("UboMiss", Settings::values.test_ubo_miss_bypass.GetValue()) + "|" +
+                    flag("Ubo16K", Settings::values.test_ubo_16k_stream.GetValue()) + "|" +
+                    flag("MemPrio", Settings::values.test_vram_memory_priority.GetValue());
+                if (!ui->action_Show_Performance_Overlay->isChecked()) {
+                    ui->action_Show_Performance_Overlay->setChecked(true);
+                    UISettings::values.show_perf_overlay.SetValue(true);
+                    if (perf_overlay) {
+                        perf_overlay->setVisible(true);
+                    }
+                }
+                Common::BenchRecorder::Instance().Start(
+                    30.0, tag,
+                    Common::FS::GetEdenPath(Common::FS::EdenPath::EdenDir) / "benchmarks",
+                    warmup_sec);
+                bench_timer->start();
+                update_overlay_btn();
+            };
+            menu.addAction(QObject::tr("⏱  Record A/B Benchmark (30s Warmup + 30s CSV)"),
+                           [start_bench] { start_bench(30.0); });
+            menu.addAction(QObject::tr("⏱  Record A/B Benchmark (Instant 30s CSV)"),
+                           [start_bench] { start_bench(0.0); });
         }
 
         menu.addSeparator();

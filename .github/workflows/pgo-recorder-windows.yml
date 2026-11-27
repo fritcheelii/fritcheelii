@@ -1,0 +1,147 @@
+name: pgo-recorder-windows
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-pgo-recorder:
+    name: Windows PGO Instrumentation Recorder
+    runs-on: windows-2022
+    env:
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 3G
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install LLVM on Windows
+        shell: pwsh
+        run: ./tools/windows/install-llvm.ps1
+
+      - name: Install Qt on Windows
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.3"
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: qtcharts
+          cache: true
+
+      - name: Install sccache on Windows
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP 'sccache.zip'
+          $url = 'https://github.com/mozilla/sccache/releases/download/v0.19.0/sccache-v0.19.0-x86_64-pc-windows-msvc.zip'
+          $ok = $false
+          foreach ($attempt in 1..5) {
+            try {
+              Invoke-WebRequest -OutFile $zip $url -TimeoutSec 120
+              $ok = $true
+              break
+            } catch {
+              Write-Host "sccache download attempt $attempt failed: $($_.Exception.Message)"
+              Start-Sleep -Seconds (15 * $attempt)
+            }
+          }
+          if (-not $ok) {
+            Write-Host "::warning::sccache could not be downloaded; building without the compiler cache"
+            exit 0
+          }
+          Expand-Archive $zip -DestinationPath (Join-Path $env:RUNNER_TEMP 'sccache')
+          $bin = (Get-ChildItem -Recurse -Filter sccache.exe (Join-Path $env:RUNNER_TEMP 'sccache')).DirectoryName
+          $bin | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+
+      - name: Install Vulkan SDK on Windows
+        shell: pwsh
+        run: ./tools/windows/install-vulkan-sdk.ps1
+
+      - name: Restore CPM downloads
+        id: cpm-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .cache/cpm
+          key: cpm-windows-x86_64-pgo-v2-${{ hashFiles('cpmfile.json', 'CMakeLists.txt', 'CMakeModules/CPM*.cmake', 'externals/**/CMakeLists.txt', 'src/**/CMakeLists.txt') }}
+          restore-keys: |
+            cpm-windows-x86_64-pgo-v2-
+            cpm-Windows-
+
+      - name: Configure Windows PGO Recorder
+        shell: bash
+        run: |
+          set -euo pipefail
+          flags="-DWIN32 -D_WINDOWS -DNOMINMAX -fprofile-generate"
+          prof_lib=$(find "$(cygpath -u "$LLVM_ROOT")/lib/clang" -name "clang_rt.profile-x86_64.lib" | head -n 1)
+          if [ -z "$prof_lib" ]; then
+            echo "Could not find clang_rt.profile-x86_64.lib under $LLVM_ROOT/lib/clang"
+            exit 1
+          fi
+          prof_dir=$(cygpath -m "$(dirname "$prof_lib")")
+          echo "Using PGO runtime: $prof_dir/clang_rt.profile-x86_64.lib"
+          launcher=()
+          if command -v sccache > /dev/null; then
+            launcher=(-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache)
+          fi
+          retry() { local n; for n in 1 2 3 4; do "$@" && return 0; echo "::warning::attempt $n of '$*' failed; retrying" >&2; sleep $((n * 30)); done; return 1; }
+          retry cmake -S . -B build/release -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=OFF \
+            -DYUZU_TESTS=OFF \
+            -DYUZU_CMD=ON \
+            -DYUZU_ROOM=OFF \
+            -DYUZU_ROOM_STANDALONE=OFF \
+            -DYUZU_USE_BUNDLED_QT=OFF \
+            -DENABLE_QT_TRANSLATION=ON \
+            -DYUZU_USE_BUNDLED_SDL3=ON \
+            -DYUZU_USE_BUNDLED_SIRIT=OFF \
+            -DENABLE_WERROR=OFF \
+            -DENABLE_UPDATE_CHECKER=OFF \
+            -DLICHII_BUILD_PLATFORM=windows-x86_64-pgo \
+            -DUSE_DISCORD_PRESENCE=OFF \
+            "${launcher[@]}" \
+            "-DCMAKE_C_COMPILER=$LLVM_ROOT/bin/clang-cl.exe" \
+            "-DCMAKE_CXX_COMPILER=$LLVM_ROOT/bin/clang-cl.exe" \
+            "-DCMAKE_LINKER=$LLVM_ROOT/bin/lld-link.exe" \
+            "-DCMAKE_AR=$LLVM_ROOT/bin/llvm-lib.exe" \
+            "-DCMAKE_EXE_LINKER_FLAGS=/machine:x64 /LIBPATH:\"$prof_dir\" clang_rt.profile-x86_64.lib" \
+            "-DCMAKE_C_FLAGS=$flags" \
+            "-DCMAKE_CXX_FLAGS=-EHsc $flags"
+
+      - name: Build PGO Recorder
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build/release --target yuzu --parallel
+
+      - name: Package Windows PGO Recorder
+        shell: pwsh
+        run: |
+          if (Test-Path "build/release/bin/cheezyemu.exe") {
+            Move-Item -Force "build/release/bin/cheezyemu.exe" "build/release/bin/FritCheeLii v6.2 PGO-Recorder.exe"
+          }
+          if (-not (Test-Path "build/release/bin/FritCheeLii v6.2 PGO-Recorder.exe")) {
+            throw "build/release/bin/FritCheeLii v6.2 PGO-Recorder.exe was not produced"
+          }
+          windeployqt --release --no-translations "build/release/bin/FritCheeLii v6.2 PGO-Recorder.exe"
+          $bat = @'
+          @echo off
+          if not exist "%~dp0pgo_profiles" mkdir "%~dp0pgo_profiles"
+          set "LLVM_PROFILE_FILE=%~dp0pgo_profiles\fritcheelii-%p.profraw"
+          start "" "%~dp0FritCheeLii v6.2 PGO-Recorder.exe"
+          '@
+          Set-Content -Path "build/release/bin/Record_PGO.bat" -Value $bat -Encoding ASCII
+
+      - name: Upload PGO Recorder artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: FritCheeLii-v6.2-PGO-Recorder-Windows-x64
+          path: build/release/bin/
+          if-no-files-found: error
+          retention-days: 7

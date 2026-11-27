@@ -17,6 +17,7 @@
 #include <QFileInfo>
 #include <QFrame>
 #include <QLabel>
+#include <QLocale>
 #include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
@@ -30,6 +31,7 @@
 
 #include "common/fs/path_util.h"
 #include "qt_common/game_list/game_list_p.h"
+#include "video_core/shader_warm/shader_warm_builder.h"
 #include "yuzu/fritchii/fritchii_ui.h"
 #include "yuzu/fritchii/saves_window.h"
 
@@ -389,6 +391,20 @@ QWidget* Home::MakePage() {
             std::filesystem::exists(shader_dir / "vulkan.fork-v54.bin", cache_ec) ||
             std::filesystem::exists(shader_dir / "precache-graphics.bin", cache_ec);
 
+        const u64 fast_gfx = VideoCommon::ShaderWarm::FastEssentialGraphicsCount();
+        const u64 fast_cmp = VideoCommon::ShaderWarm::FastEssentialComputeCount();
+        const u64 fast_total = fast_gfx + fast_cmp;
+        const double fast_pct = 100.0 * static_cast<double>(fast_total) / 121364.0;
+        constexpr u64 ext_total = 30000;
+        const u64 ext_gfx = ext_total > fast_cmp ? ext_total - fast_cmp : ext_total;
+        const QLocale loc;
+        const QString fast_total_s = loc.toString(static_cast<qulonglong>(fast_total));
+        const QString fast_gfx_s = loc.toString(static_cast<qulonglong>(fast_gfx));
+        const QString fast_cmp_s = loc.toString(static_cast<qulonglong>(fast_cmp));
+        const QString fast_pct_s = QString::number(fast_pct, 'f', 1);
+        const QString ext_total_s = loc.toString(static_cast<qulonglong>(ext_total));
+        const QString ext_gfx_s = loc.toString(static_cast<qulonglong>(ext_gfx));
+
         auto* status_box = new QLabel(&dlg);
         status_box->setWordWrap(true);
         if (full_ready) {
@@ -396,13 +412,14 @@ QWidget* Home::MakePage() {
                 "QLabel { background-color: #102419; color: #6ee7b7; border: 1px solid #059669; "
                 "border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 700; }"));
             status_box->setText(
-                tr("✔  Status: Extended Cache Built (30,000 / 121,364 shaders ready)"));
+                tr("✔  Status: Extended Cache Built (%1 / 121,364 shaders ready)").arg(ext_total_s));
         } else if (fast_ready) {
             status_box->setStyleSheet(QStringLiteral(
                 "QLabel { background-color: #102419; color: #6ee7b7; border: 1px solid #059669; "
                 "border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 700; }"));
             status_box->setText(
-                tr("✔  Status: Fast Essential Built (9,100 / 121,364 shaders ready to play!)"));
+                tr("✔  Status: Fast Essential Built (%1 / 121,364 shaders ready to play!)")
+                    .arg(fast_total_s));
         } else {
             status_box->setStyleSheet(QStringLiteral(
                 "QLabel { background-color: #181822; color: #d4d4dc; border: 1px solid #2e2e3a; "
@@ -430,17 +447,20 @@ QWidget* Home::MakePage() {
 
         auto* fast_btn = make_action_btn(
             fast_ready
-                ? tr("✔  Fast Essential (9,100 shaders — ~7.5%)  [BUILT / READY]")
-                : tr("▶  Fast Essential (9,100 shaders — ~7.5%)"),
-            tr("Real-gameplay Pareto shaders (8,342 graphics + 758 real compute). Best balance && "
-               "mandatory for Play."),
+                ? tr("✔  Fast Essential (%1 shaders — ~%2%)  [BUILT / READY]")
+                      .arg(fast_total_s, fast_pct_s)
+                : tr("▶  Fast Essential (%1 shaders — ~%2%)").arg(fast_total_s, fast_pct_s),
+            tr("Real-gameplay Pareto shaders (%1 graphics + %2 real compute). Best balance && "
+               "mandatory for Play.")
+                .arg(fast_gfx_s, fast_cmp_s),
             fast_ready ? "#059669" : "#7c3aed", fast_ready ? "#11221a" : "#181526");
         auto* full_btn = make_action_btn(
             full_ready
-                ? tr("✔  Extended Cache (30,000 shaders — ~25%)  [BUILT / READY]")
-                : tr("▶  Extended Cache (30,000 shaders — ~25%)"),
-            tr("Real gameplay + top recipe shaders (29,242 graphics + 758 real compute) for "
-               "late-game && adult dungeons."),
+                ? tr("✔  Extended Cache (%1 shaders — ~25%)  [BUILT / READY]").arg(ext_total_s)
+                : tr("▶  Extended Cache (%1 shaders — ~25%)").arg(ext_total_s),
+            tr("Real gameplay + top recipe shaders (%1 graphics + %2 real compute) for "
+               "late-game && adult dungeons.")
+                .arg(ext_gfx_s, fast_cmp_s),
             full_ready ? "#059669" : "#2e2e3a", full_ready ? "#11221a" : "#14141b");
         auto* clear_btn = make_action_btn(
             has_any_cache ? tr("🗑  Clear Shader Cache")

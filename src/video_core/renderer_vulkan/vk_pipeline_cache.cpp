@@ -4115,3 +4115,15 @@ vk::PipelineCache PipelineCache::LoadVulkanPipelineCache(const std::filesystem::
 }
 
 } // namespace Vulkan
+
+namespace VideoCommon::ShaderWarm {
+
+u64 FastEssentialGraphicsCount() noexcept {
+    return VideoCommon::OotGameplayPipelineHashes.size();
+}
+
+u64 FastEssentialComputeCount() noexcept {
+    return VideoCommon::OOT_COMPUTE_META.size();
+}
+
+} // namespace VideoCommon::ShaderWarm

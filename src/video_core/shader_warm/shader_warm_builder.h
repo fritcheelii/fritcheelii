@@ -100,6 +100,8 @@ void SetStandaloneBuildMode(StandaloneBuildMode mode);
 [[nodiscard]] StandaloneBuildMode GetStandaloneBuildMode();
 [[nodiscard]] bool IsStandaloneBuildOnly();
 [[nodiscard]] bool IsFullCacheRequested();
+[[nodiscard]] u64 FastEssentialGraphicsCount() noexcept;
+[[nodiscard]] u64 FastEssentialComputeCount() noexcept;
 
 /// The GPU driver, device and pipeline cache version pipelines were precached for.
 struct DriverStamp {
