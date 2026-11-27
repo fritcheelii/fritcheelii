@@ -2207,24 +2207,46 @@ AMD FSR 3 Frame Gen: usa vetores de movimento reais do jogo (AMD / RTX 20–30 /
 NVIDIA DLSS Frame Gen: Tensor Cores das RTX 40/50 (cai automaticamente para Optical Flow em outras GPUs).</translation>
         </message>
         <message>
-            <source>Total frames shown per real game frame (2 = doubles visual FPS). Recommended: 2.</source>
-            <translation>Total de quadros exibidos por quadro real do jogo (2 = dobra o FPS visual). Recomendado: 2.</translation>
+            <source>Auto picks FSR 4 on RX 9000 and FSR 3.1 on all other GPUs.
+Requires restart.</source>
+            <translation>Auto escolhe FSR 4 nas RX 9000 e FSR 3.1 nas demais GPUs.
+Requer reiniciar.</translation>
         </message>
         <message>
-            <source>0 = fixed multiplier above. Set a target (e.g. 60) to generate frames adaptively up to that FPS. AMD FSR and DLSS-G always use 2x.</source>
-            <translation>0 = usa o multiplicador fixo acima. Defina uma meta (ex.: 60) para gerar quadros adaptativamente até esse FPS. AMD FSR e DLSS-G sempre usam 2x.</translation>
+            <source>Total frames shown per real game frame
+(2 = doubles visual FPS). Recommended: 2.</source>
+            <translation>Total de quadros exibidos por quadro real do jogo
+(2 = dobra o FPS visual). Recomendado: 2.</translation>
         </message>
         <message>
-            <source>Automatically chooses the internal motion-estimation resolution for Optical Flow based on screen resolution. Recommended: ON.</source>
-            <translation>Escolhe automaticamente a resolução interna de cálculo de movimento do Optical Flow conforme a resolução da tela. Recomendado: Ligado.</translation>
+            <source>0 = fixed multiplier above. Set a target (e.g. 60)
+to generate frames adaptively up to that FPS.
+AMD FSR and DLSS-G always use 2x.</source>
+            <translation>0 = usa o multiplicador fixo acima. Defina uma meta (ex.: 60)
+para gerar quadros adaptativamente até esse FPS.
+AMD FSR e DLSS-G sempre usam 2x.</translation>
         </message>
         <message>
-            <source>Manual motion-estimation resolution when Auto Flow Scale is OFF. Higher = fewer artifacts on small objects; lower (50%) = lighter on 4 GB GPUs.</source>
-            <translation>Resolução manual do cálculo de movimento quando Auto Flow Scale está desligado. Maior = menos artefatos em objetos pequenos; menor (50%) = mais leve em GPUs de 4 GB.</translation>
+            <source>Automatically chooses the internal motion-estimation resolution
+for Optical Flow based on screen resolution. Recommended: ON.</source>
+            <translation>Escolhe automaticamente a resolução interna de cálculo de movimento
+do Optical Flow conforme a resolução da tela. Recomendado: Ligado.</translation>
         </message>
         <message>
-            <source>Extra frames queued before presentation. 0 = lowest input lag (recommended); 1–2 = smoother pacing with slightly higher latency.</source>
-            <translation>Quadros extras na fila antes da apresentação. 0 = menor atraso nos controles (recomendado); 1–2 = ritmo mais suave com um pouco mais de latência.</translation>
+            <source>Manual motion-estimation resolution when Auto Flow Scale is OFF.
+Higher = fewer artifacts on small objects;
+lower (50%) = lighter on 4 GB GPUs.</source>
+            <translation>Resolução manual do cálculo de movimento quando Auto Flow Scale está desligado.
+Maior = menos artefatos em objetos pequenos;
+menor (50%) = mais leve em GPUs de 4 GB.</translation>
+        </message>
+        <message>
+            <source>Extra frames queued before presentation.
+0 = lowest input lag (recommended);
+1–2 = smoother pacing with slightly higher latency.</source>
+            <translation>Quadros extras na fila antes da apresentação.
+0 = menor atraso nos controles (recomendado);
+1–2 = ritmo mais suave com um pouco mais de latência.</translation>
         </message>
     </context>
     <context>
@@ -11093,6 +11115,148 @@ Error code: %3</source>
         <message>
             <source>Real gameplay + top recipe shaders (%1 graphics + %2 real compute) for late-game &amp; adult dungeons.</source>
             <translation>Gameplay real + principais shaders da recipe (%1 gráficos + %2 compute reais) para late-game e dungeons adulto.</translation>
+        </message>
+    </context>
+    <context>
+        <name>RecommendedSettingsDialog</name>
+        <message>
+            <source>Best settings for this PC</source>
+            <translation>Melhores configurações para este PC</translation>
+        </message>
+        <message>
+            <source>&lt;b&gt;Use the settings FritCheeLii recommends for this PC?&lt;/b&gt;</source>
+            <translation>&lt;b&gt;Usar as configurações recomendadas pelo FritCheeLii para este PC?&lt;/b&gt;</translation>
+        </message>
+        <message>
+            <source>%1
+
+These configure performance options, AMD FSR, frame generation, and Ocarina of Time&apos;s render size. You can return to defaults via Help &gt; Restore Default Settings.</source>
+            <translation>%1
+
+Isso ajusta opções de desempenho, AMD FSR, Frame Generation e a resolução de renderização de Ocarina of Time. Você pode voltar ao padrão em Ajuda &gt; Restaurar Configurações Padrão.</translation>
+        </message>
+        <message>
+            <source>Preset to apply:</source>
+            <translation>Perfil para aplicar:</translation>
+        </message>
+        <message>
+            <source>Auto — Recommended for This PC</source>
+            <translation>Auto — Recomendado para este PC</translation>
+        </message>
+        <message>
+            <source>Entry / 4–6 GB VRAM (Max FPS — Handheld, Performance 50% FSR, AA Off, BC3, All 12 Perf Fixes)</source>
+            <translation>Entrada / 4–6 GB VRAM (Máximo FPS — Portátil, Performance 50%, AA Desligado, BC3, 12 Otimizações)</translation>
+        </message>
+        <message>
+            <source>Mid-Range / 8 GB VRAM (Balanced — Quality FSR, BC3)</source>
+            <translation>Intermediário / 8 GB VRAM (Equilibrado — Quality FSR, BC3)</translation>
+        </message>
+        <message>
+            <source>High-End / 12–16 GB+ VRAM (Best Visuals — Native/Quality, Uncompressed)</source>
+            <translation>Avançado / 12–16 GB+ VRAM (Melhor Visual — Native/Quality, Sem compressão)</translation>
+        </message>
+        <message>
+            <source>Apply settings</source>
+            <translation>Aplicar</translation>
+        </message>
+        <message>
+            <source>Not now</source>
+            <translation>Agora não</translation>
+        </message>
+        <message>
+            <source>Recommended settings</source>
+            <translation>Configurações recomendadas</translation>
+        </message>
+        <message>
+            <source>Your settings already match the recommended settings. Nothing changed.</source>
+            <translation>Suas configurações já correspondem às recomendadas. Nada foi alterado.</translation>
+        </message>
+        <message>
+            <source>FritCheeLii now uses the recommended settings.</source>
+            <translation>O FritCheeLii agora está usando as configurações recomendadas.</translation>
+        </message>
+        <message>
+            <source>On</source>
+            <translation>Ligado</translation>
+        </message>
+        <message>
+            <source>Off</source>
+            <translation>Desligado</translation>
+        </message>
+        <message>
+            <source>To return to the optimized defaults, use Help &gt; Restore Default Settings.</source>
+            <translation>Para voltar ao padrão otimizado, use Ajuda &gt; Restaurar Configurações Padrão.</translation>
+        </message>
+        <message>
+            <source>Default settings</source>
+            <translation>Configurações padrão</translation>
+        </message>
+        <message>
+            <source>Your settings already match FritCheeLii&apos;s default settings.</source>
+            <translation>Suas configurações já correspondem ao padrão do FritCheeLii.</translation>
+        </message>
+        <message>
+            <source>FritCheeLii has restored the optimized default settings.</source>
+            <translation>O FritCheeLii restaurou as configurações padrão otimizadas.</translation>
+        </message>
+        <message>
+            <source>To auto-detect settings for your hardware again, use Help &gt; Find Best Settings for This PC...</source>
+            <translation>Para detectar novamente o melhor perfil para o seu hardware, use Ajuda &gt; Encontrar Melhores Configurações...</translation>
+        </message>
+    </context>
+    <context>
+        <name>QObject</name>
+        <message>
+            <source>Switch between up to 8 separate campaigns. Select a slot to preview the exact in-game location where you last saved.</source>
+            <translation>Alterne entre até 8 campanhas separadas. Selecione um slot para visualizar o local exato onde você salvou pela última vez.</translation>
+        </message>
+        <message>
+            <source>Switches the active campaign to the selected slot.
+Your current active slot is backed up automatically first.</source>
+            <translation>Troca a campanha ativa para o slot selecionado.
+O slot ativo atual é salvo e copiado em backup automaticamente antes.</translation>
+        </message>
+        <message>
+            <source>Copies the current [ACTIVE] campaign into the selected slot
+as a backup or checkpoint.</source>
+            <translation>Copia a campanha [ACTIVE] atual para dentro do slot selecionado
+como backup ou ponto de salvamento.</translation>
+        </message>
+        <message>
+            <source>Changes the display name of the selected slot.</source>
+            <translation>Altera o nome exibido para o slot selecionado.</translation>
+        </message>
+        <message>
+            <source>Saves a compressed (.zip) copy of only the selected slot.</source>
+            <translation>Salva uma cópia compactada (.zip) apenas do slot selecionado.</translation>
+        </message>
+        <message>
+            <source>Deletes the saved data in the selected slot
+and resets its name back to Slot N.</source>
+            <translation>Apaga os arquivos do slot selecionado (com backup automático)
+e restaura o nome padrão para Slot N.</translation>
+        </message>
+        <message>
+            <source>Exports your Active Campaign, a specific slot, or all 8 slots (.zip)
+to another emulator or backup file.</source>
+            <translation>Exporta sua campanha ativa, um slot específico ou todos os 8 slots (.zip)
+para outro emulador ou arquivo de backup.</translation>
+        </message>
+        <message>
+            <source>Imports saves from another emulator, portable folder, or .zip backup
+into a chosen slot or all Multi-Save slots.</source>
+            <translation>Importa saves de outro emulador, pasta portátil ou backup .zip
+para um slot escolhido ou para todos os slots Multi-Save.</translation>
+        </message>
+        <message>
+            <source>Opens the folder where your active Zelda OoT save files live.</source>
+            <translation>Abre a pasta onde ficam os arquivos do seu save ativo de Zelda OoT.</translation>
+        </message>
+        <message>
+            <source>Opens the automatic backups folder created before
+switching, clearing, or importing saves.</source>
+            <translation>Abre a pasta de backups automáticos criados antes de
+trocar, limpar ou importar saves.</translation>
         </message>
     </context>
 </TS>

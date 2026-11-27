@@ -548,10 +548,6 @@ QWidget* Home::MakePage() {
         if (hero_path.isEmpty()) {
             hooks.add_folder();
         } else {
-            if (hero_id == OcarinaOfTime &&
-                !ChooseOotSaveSlotBeforePlay(window, hooks.emulation_running)) {
-                return;
-            }
             RefreshSaveSlots();
             hooks.play(hero_path, hero_id);
         }

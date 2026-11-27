@@ -461,6 +461,7 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
 
         auto* upscale_hint = new QLabel(oot_scale_box);
         upscale_hint->setWordWrap(true);
+        upscale_hint->setContentsMargins(0, 2, 0, 8);
         upscale_hint->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::MinimumExpanding);
         box_layout->addWidget(upscale_hint);
 

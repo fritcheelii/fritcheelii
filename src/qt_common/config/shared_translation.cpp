@@ -271,17 +271,24 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
               "AMD FSR 3 Frame Gen: uses real game motion vectors (AMD / RTX 20–30 / Intel, 6–8 GB+ VRAM).\n"
               "NVIDIA DLSS Frame Gen: RTX 40/50 Tensor Cores (automatically falls back to Optical Flow on other GPUs)."));
     INSERT(Settings, amd_frame_gen_version, tr("AMD Frame Generation Version"),
-           tr("Auto picks FSR 4 on RX 9000 and FSR 3.1 on all other GPUs. Requires restart."));
+           tr("Auto picks FSR 4 on RX 9000 and FSR 3.1 on all other GPUs.\nRequires restart."));
     INSERT(Settings, frame_gen_multiplier, tr("Frame Generation Multiplier"),
-           tr("Total frames shown per real game frame (2 = doubles visual FPS). Recommended: 2."));
+           tr("Total frames shown per real game frame\n(2 = doubles visual FPS). Recommended: 2."));
     INSERT(Settings, frame_gen_target_rate, tr("Target Frame Rate"),
-           tr("0 = fixed multiplier above. Set a target (e.g. 60) to generate frames adaptively up to that FPS. AMD FSR and DLSS-G always use 2x."));
+           tr("0 = fixed multiplier above. Set a target (e.g. 60)\n"
+              "to generate frames adaptively up to that FPS.\n"
+              "AMD FSR and DLSS-G always use 2x."));
     INSERT(Settings, frame_gen_flow_scale_auto, tr("Auto Flow Scale"),
-           tr("Automatically chooses the internal motion-estimation resolution for Optical Flow based on screen resolution. Recommended: ON."));
+           tr("Automatically chooses the internal motion-estimation resolution\n"
+              "for Optical Flow based on screen resolution. Recommended: ON."));
     INSERT(Settings, frame_gen_flow_scale, tr("Flow Scale"),
-           tr("Manual motion-estimation resolution when Auto Flow Scale is OFF. Higher = fewer artifacts on small objects; lower (50%) = lighter on 4 GB GPUs."));
+           tr("Manual motion-estimation resolution when Auto Flow Scale is OFF.\n"
+              "Higher = fewer artifacts on small objects;\n"
+              "lower (50%) = lighter on 4 GB GPUs."));
     INSERT(Settings, frame_gen_queue_target, tr("Queue Target"),
-           tr("Extra frames queued before presentation. 0 = lowest input lag (recommended); 1–2 = smoother pacing with slightly higher latency."));
+           tr("Extra frames queued before presentation.\n"
+              "0 = lowest input lag (recommended);\n"
+              "1–2 = smoother pacing with slightly higher latency."));
     INSERT(Settings, frame_gen_dump_flow, tr("Dump Optical Flow"), QString());
 
     // Renderer (Advanced Graphics)

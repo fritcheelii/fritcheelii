@@ -1075,37 +1075,28 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
 
     auto* slot_btns = new QHBoxLayout;
     auto* btn_activate = new QPushButton(QObject::tr("Activate / Switch"), &dialog);
-    auto* btn_save_here = new QPushButton(QObject::tr("Save Current Here"), &dialog);
+    auto* btn_save_here = new QPushButton(QObject::tr("Clone Active Here"), &dialog);
     auto* btn_rename = new QPushButton(QObject::tr("Rename"), &dialog);
     auto* btn_export_slot = new QPushButton(QObject::tr("Export Slot (.zip)"), &dialog);
     auto* btn_clear_slot = new QPushButton(QObject::tr("Clear Slot"), &dialog);
+    btn_activate->setToolTip(QObject::tr(
+        "Switches the active campaign to the selected slot.\n"
+        "Your current active slot is backed up automatically first."));
+    btn_save_here->setToolTip(QObject::tr(
+        "Copies the current [ACTIVE] campaign into the selected slot\n"
+        "as a backup or checkpoint."));
+    btn_rename->setToolTip(QObject::tr("Changes the display name of the selected slot."));
+    btn_export_slot->setToolTip(
+        QObject::tr("Saves a compressed (.zip) copy of only the selected slot."));
+    btn_clear_slot->setToolTip(QObject::tr(
+        "Deletes the saved data in the selected slot\n"
+        "and resets its name back to Slot N."));
     slot_btns->addWidget(btn_activate);
     slot_btns->addWidget(btn_save_here);
     slot_btns->addWidget(btn_rename);
     slot_btns->addWidget(btn_export_slot);
     slot_btns->addWidget(btn_clear_slot);
     layout->addLayout(slot_btns, row++, 0, 1, 2);
-
-    auto* ask_on_play_cb = new QCheckBox(
-        QObject::tr("Ask which save slot before playing (8-slot picker on Play)"), &dialog);
-    {
-        std::error_code ec;
-        ask_on_play_cb->setChecked(!fs::is_regular_file(slots_root / "skip_play_picker.txt", ec));
-    }
-    QObject::connect(ask_on_play_cb, &QCheckBox::toggled, &dialog, [slots_root](bool checked) {
-        std::error_code ec;
-        const fs::path flag = slots_root / "skip_play_picker.txt";
-        if (checked) {
-            fs::remove(flag, ec);
-        } else {
-            fs::create_directories(slots_root, ec);
-            std::ofstream out(flag, std::ios::trunc);
-            if (out) {
-                out << "1\n";
-            }
-        }
-    });
-    layout->addWidget(ask_on_play_cb, row++, 0, 1, 2);
 
     QObject::connect(btn_activate, &QPushButton::clicked, &dialog, [&] {
         if (blocked()) {
@@ -1274,7 +1265,7 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
         }
         std::error_code ec;
         fs::remove_all(sdir / "data", ec);
-        WriteSlotMeta(sdir, ReadSlotMeta(sdir, sel).name, QString{});
+        fs::remove(sdir / "meta.txt", ec);
         refresh_slots();
     });
 
@@ -1285,6 +1276,9 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
 
     // Universal Export (Active Campaign or Any Slot -> Emulator / Triforce / NX2navi / Ryujinx / .zip)
     auto* export_button = new QPushButton(QObject::tr("Export..."), &dialog);
+    export_button->setToolTip(QObject::tr(
+        "Exports your Active Campaign, a specific slot, or all 8 slots (.zip)\n"
+        "to another emulator or backup file."));
     layout->addWidget(
         new QLabel(
             QObject::tr("Export saves (Triforce, NX2navi, Ryujinx, Other Emulators or .zip)"),
@@ -1506,6 +1500,9 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
 
     // Universal Import (with Location Preview & Target Slot Selection)
     auto* import_button = new QPushButton(QObject::tr("Import..."), &dialog);
+    import_button->setToolTip(QObject::tr(
+        "Imports saves from another emulator, portable folder, or .zip backup\n"
+        "into a chosen slot or all Multi-Save slots."));
     layout->addWidget(
         new QLabel(
             QObject::tr("Import saves (Triforce, NX2navi, Ryujinx, Other Emulators or .zip)"),
@@ -1567,15 +1564,71 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
 
         v->addWidget(new QLabel(QObject::tr("Import into:"), &pick));
         auto* dst_slot_combo = new QComboBox(&pick);
+        v->addWidget(dst_slot_combo);
+
+        auto* src_slot_label =
+            new QLabel(QObject::tr("Source slot to import (from Multi-Save):"), &pick);
+        auto* src_slot_combo = new QComboBox(&pick);
+        v->addWidget(src_slot_label);
+        v->addWidget(src_slot_combo);
+
+        auto* btns = new QHBoxLayout;
+        auto* ok_btn = new QPushButton(QObject::tr("Import"), &pick);
+        auto* cancel_btn = new QPushButton(QObject::tr("Cancel"), &pick);
+        btns->addStretch(1);
+        btns->addWidget(ok_btn);
+        btns->addWidget(cancel_btn);
+
+        const auto update_source_slots_ui = [&] {
+            const QVariant cur = combo->currentData();
+            const int target_slot_val = dst_slot_combo->currentData().toInt();
+            src_slot_combo->clear();
+            bool show_src_slots = false;
+            bool can_import = true;
+            if (cur.typeId() == QMetaType::Int) {
+                const auto& d = detected[static_cast<size_t>(cur.toInt())];
+                const int multi_count = CountPopulatedMultiSlots(d.slots_dir);
+                can_import = d.summary.has_data || multi_count > 0;
+                if (multi_count > 0 && target_slot_val != -1) {
+                    if (d.summary.has_data && DirHasFiles(d.oot_dir)) {
+                        src_slot_combo->addItem(
+                            QObject::tr("Active Campaign (%1 / 6 files)")
+                                .arg(d.summary.used_files),
+                            QString::fromStdString(Common::FS::PathToUTF8String(d.oot_dir)));
+                    }
+                    for (int i = 1; i <= 8; ++i) {
+                        const fs::path sdir = d.slots_dir / fmt::format("slot_{}", i);
+                        const fs::path sdata = sdir / "data";
+                        if (!DirHasFiles(sdata)) {
+                            continue;
+                        }
+                        const SlotMeta sm = ReadSlotMeta(sdir, i);
+                        const OotSaveSummary ssum = InspectOotSaveDir(sdata, false);
+                        src_slot_combo->addItem(
+                            QObject::tr("Slot %1 — %2 (%3 / 6 files)")
+                                .arg(i)
+                                .arg(sm.name)
+                                .arg(ssum.used_files),
+                            QString::fromStdString(Common::FS::PathToUTF8String(sdata)));
+                    }
+                    show_src_slots = src_slot_combo->count() > 0;
+                }
+            }
+            src_slot_label->setVisible(show_src_slots);
+            src_slot_combo->setVisible(show_src_slots);
+            ok_btn->setEnabled(can_import);
+        };
 
         const auto update_import_preview = [&] {
             const QVariant cur = combo->currentData();
             bool has_multi_slots = false;
             int multi_slot_count = 0;
+            bool has_active_data = true;
             if (cur.typeId() == QMetaType::Int) {
                 const auto& d = detected[static_cast<size_t>(cur.toInt())];
                 multi_slot_count = CountPopulatedMultiSlots(d.slots_dir);
                 has_multi_slots = multi_slot_count > 0;
+                has_active_data = d.summary.has_data;
                 imp_preview_box->setVisible(true);
                 if (!d.summary.preview.isNull()) {
                     imp_thumb->setText(QString{});
@@ -1600,6 +1653,7 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                 imp_preview_box->setVisible(false);
             }
 
+            dst_slot_combo->blockSignals(true);
             dst_slot_combo->clear();
             if (has_multi_slots) {
                 dst_slot_combo->addItem(
@@ -1607,24 +1661,22 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                         .arg(multi_slot_count),
                     -1);
             }
-            dst_slot_combo->addItem(
-                QObject::tr("Active Campaign (Current Slot %1)").arg(active), 0);
-            for (int i = 1; i <= 8; ++i) {
-                const SlotMeta sm = ReadSlotMeta(slots_root / fmt::format("slot_{}", i), i);
-                dst_slot_combo->addItem(QObject::tr("Slot %1 — %2").arg(i).arg(sm.name), i);
+            if (has_active_data || has_multi_slots) {
+                dst_slot_combo->addItem(
+                    QObject::tr("Active Campaign (Current Slot %1)").arg(active), 0);
+                for (int i = 1; i <= 8; ++i) {
+                    const SlotMeta sm = ReadSlotMeta(slots_root / fmt::format("slot_{}", i), i);
+                    dst_slot_combo->addItem(QObject::tr("Slot %1 — %2").arg(i).arg(sm.name), i);
+                }
             }
+            dst_slot_combo->blockSignals(false);
+            update_source_slots_ui();
         };
         QObject::connect(combo, &QComboBox::currentIndexChanged, &pick,
                          [&](int) { update_import_preview(); });
+        QObject::connect(dst_slot_combo, &QComboBox::currentIndexChanged, &pick,
+                         [&](int) { update_source_slots_ui(); });
         update_import_preview();
-        v->addWidget(dst_slot_combo);
-
-        auto* btns = new QHBoxLayout;
-        auto* ok_btn = new QPushButton(QObject::tr("Import"), &pick);
-        auto* cancel_btn = new QPushButton(QObject::tr("Cancel"), &pick);
-        btns->addStretch(1);
-        btns->addWidget(ok_btn);
-        btns->addWidget(cancel_btn);
         v->addLayout(btns);
         QObject::connect(ok_btn, &QPushButton::clicked, &pick, &QDialog::accept);
         QObject::connect(cancel_btn, &QPushButton::clicked, &pick, &QDialog::reject);
@@ -1668,6 +1720,12 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
         };
 
         const auto apply_oot_import = [&](const fs::path& src_oot, const QString&) {
+            if (!DirHasFiles(src_oot)) {
+                QMessageBox::information(
+                    &dialog, QObject::tr("Saves"),
+                    QObject::tr("The selected save slot has no files to import."));
+                return;
+            }
             const QString stamp =
                 QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm"));
             if (target_slot == 0) {
@@ -1787,9 +1845,15 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                 const DetectedSaveSource& source = detected[static_cast<size_t>(choice.toInt())];
                 if (target_slot == -1 && !source.slots_dir.empty()) {
                     apply_multi_slots_import(source.slots_dir, source.name);
-                } else if (!source.oot_dir.empty()) {
+                } else if (src_slot_combo->isVisible() &&
+                           !src_slot_combo->currentData().toString().isEmpty()) {
+                    const fs::path picked_src =
+                        fs::u8path(src_slot_combo->currentData().toString().toStdString());
+                    apply_oot_import(picked_src, source.name);
+                } else if (!source.oot_dir.empty() && DirHasFiles(source.oot_dir)) {
                     apply_oot_import(source.oot_dir, source.name);
-                } else if (!source.emu_save_root.empty() && !Profiles(source.emu_save_root).empty()) {
+                } else if (!source.emu_save_root.empty() && !Profiles(source.emu_save_root).empty() &&
+                           DirHasFiles(source.emu_save_root)) {
                     const auto backup_path = BackupPath(fritchii);
                     const auto backup = Backup(fritchii, backup_path);
                     const int games = CopySaves(source.emu_save_root, fritchii);
@@ -1873,6 +1937,11 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
     auto* bottom = new QHBoxLayout;
     auto* open_saves_btn = new QPushButton(QObject::tr("Open Saves Folder"), &dialog);
     auto* open_backups_btn = new QPushButton(QObject::tr("Open Backups"), &dialog);
+    open_saves_btn->setToolTip(
+        QObject::tr("Opens the folder where your active Zelda OoT save files live."));
+    open_backups_btn->setToolTip(QObject::tr(
+        "Opens the automatic backups folder created before\n"
+        "switching, clearing, or importing saves."));
     auto* close = new QPushButton(QObject::tr("Close"), &dialog);
     bottom->addWidget(open_saves_btn);
     bottom->addWidget(open_backups_btn);

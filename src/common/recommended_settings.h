@@ -116,6 +116,9 @@ void ForEachRecommendedSetting(Values& config, const HostProfile& host, Func&& f
     // What depends on the PC: AMD FSR, frame generation and Ocarina of Time's render size.
     // AMD FSR 4 only runs on supported AMD GPUs (keep OFF on NVIDIA and <7 GB cards).
     entry(config.amd_fsr4, host.windows && host.amd && (large_card || medium_card));
+    // Reset alternative upscaling methods so Find Best Settings always restores the ideal method.
+    entry(config.nvidia_dlss, false);
+    entry(config.game_dlss_network, false);
     // AMD frame generation keeps about 1.5 GB of RAM for itself: a PC with 16 GB runs out with
     // it (build 11 reports of error 1455 and whole-PC freezes), and it needs a card that holds
     // the game's frame rate.
