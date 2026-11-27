@@ -383,27 +383,28 @@ QWidget* Home::MakePage() {
             s64 wt = 0;
             cmp_in >> sz >> wt >> compute_done_entries;
         }
+        const u64 init_gfx = VideoCommon::ShaderWarm::FastEssentialGraphicsCount();
+        const u64 init_cmp = VideoCommon::ShaderWarm::FastEssentialComputeCount();
+        const u64 init_total = init_gfx + init_cmp;
+        const u64 tot_gfx = VideoCommon::ShaderWarm::TotalRealGraphicsCount();
+        const u64 tot_cmp = VideoCommon::ShaderWarm::TotalRealComputeCount();
+        const u64 tot_total = tot_gfx + tot_cmp;
+
         const bool fast_ready = (recipe_done_entries > 0);
-        const bool full_ready = (recipe_done_entries >= 25000);
+        const bool full_ready = (recipe_done_entries >= tot_gfx);
         std::error_code cache_ec;
         const bool has_any_cache =
             fast_ready || (compute_done_entries > 0) ||
             std::filesystem::exists(shader_dir / "vulkan.fork-v54.bin", cache_ec) ||
             std::filesystem::exists(shader_dir / "precache-graphics.bin", cache_ec);
 
-        const u64 fast_gfx = VideoCommon::ShaderWarm::FastEssentialGraphicsCount();
-        const u64 fast_cmp = VideoCommon::ShaderWarm::FastEssentialComputeCount();
-        const u64 fast_total = fast_gfx + fast_cmp;
-        const double fast_pct = 100.0 * static_cast<double>(fast_total) / 121364.0;
-        constexpr u64 ext_total = 30000;
-        const u64 ext_gfx = ext_total > fast_cmp ? ext_total - fast_cmp : ext_total;
         const QLocale loc;
-        const QString fast_total_s = loc.toString(static_cast<qulonglong>(fast_total));
-        const QString fast_gfx_s = loc.toString(static_cast<qulonglong>(fast_gfx));
-        const QString fast_cmp_s = loc.toString(static_cast<qulonglong>(fast_cmp));
-        const QString fast_pct_s = QString::number(fast_pct, 'f', 1);
-        const QString ext_total_s = loc.toString(static_cast<qulonglong>(ext_total));
-        const QString ext_gfx_s = loc.toString(static_cast<qulonglong>(ext_gfx));
+        const QString init_total_s = loc.toString(static_cast<qulonglong>(init_total));
+        const QString init_gfx_s = loc.toString(static_cast<qulonglong>(init_gfx));
+        const QString init_cmp_s = loc.toString(static_cast<qulonglong>(init_cmp));
+        const QString tot_total_s = loc.toString(static_cast<qulonglong>(tot_total));
+        const QString tot_gfx_s = loc.toString(static_cast<qulonglong>(tot_gfx));
+        const QString tot_cmp_s = loc.toString(static_cast<qulonglong>(tot_cmp));
 
         auto* status_box = new QLabel(&dlg);
         status_box->setWordWrap(true);
@@ -412,20 +413,20 @@ QWidget* Home::MakePage() {
                 "QLabel { background-color: #102419; color: #6ee7b7; border: 1px solid #059669; "
                 "border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 700; }"));
             status_box->setText(
-                tr("✔  Status: Extended Cache Built (%1 / 121,364 shaders ready)").arg(ext_total_s));
+                tr("✔  Status: Total Shader Cache Built (%1 real shaders ready)").arg(tot_total_s));
         } else if (fast_ready) {
             status_box->setStyleSheet(QStringLiteral(
                 "QLabel { background-color: #102419; color: #6ee7b7; border: 1px solid #059669; "
                 "border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 700; }"));
             status_box->setText(
-                tr("✔  Status: Fast Essential Built (%1 / 121,364 shaders ready to play!)")
-                    .arg(fast_total_s));
+                tr("✔  Status: Initial Shader Cache Built (%1 real shaders ready to play!)")
+                    .arg(init_total_s));
         } else {
             status_box->setStyleSheet(QStringLiteral(
                 "QLabel { background-color: #181822; color: #d4d4dc; border: 1px solid #2e2e3a; "
                 "border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 600; }"));
             status_box->setText(
-                tr("⚪  Status: Not pre-built yet (Fast Essential will run on first Play)"));
+                tr("⚪  Status: Not pre-built yet (Initial Shader Cache will run on first Play)"));
         }
         vbox->addWidget(status_box);
 
@@ -447,20 +448,19 @@ QWidget* Home::MakePage() {
 
         auto* fast_btn = make_action_btn(
             fast_ready
-                ? tr("✔  Fast Essential (%1 shaders — ~%2%)  [BUILT / READY]")
-                      .arg(fast_total_s, fast_pct_s)
-                : tr("▶  Fast Essential (%1 shaders — ~%2%)").arg(fast_total_s, fast_pct_s),
-            tr("Real-gameplay Pareto shaders (%1 graphics + %2 real compute). Best balance && "
+                ? tr("✔  Initial Shader Cache (%1 shaders)  [BUILT / READY]").arg(init_total_s)
+                : tr("▶  Initial Shader Cache (%1 shaders)").arg(init_total_s),
+            tr("1st dungeon up to Hyrule Castle (%1 graphics + %2 compute). Fast start && "
                "mandatory for Play.")
-                .arg(fast_gfx_s, fast_cmp_s),
+                .arg(init_gfx_s, init_cmp_s),
             fast_ready ? "#059669" : "#7c3aed", fast_ready ? "#11221a" : "#181526");
         auto* full_btn = make_action_btn(
             full_ready
-                ? tr("✔  Extended Cache (%1 shaders — ~25%)  [BUILT / READY]").arg(ext_total_s)
-                : tr("▶  Extended Cache (%1 shaders — ~25%)").arg(ext_total_s),
-            tr("Real gameplay + top recipe shaders (%1 graphics + %2 real compute) for "
-               "late-game && adult dungeons.")
-                .arg(ext_gfx_s, fast_cmp_s),
+                ? tr("✔  Total Shader Cache (%1 shaders)  [BUILT / READY]").arg(tot_total_s)
+                : tr("▶  Total Shader Cache (%1 shaders)").arg(tot_total_s),
+            tr("All real-gameplay shaders collected so far (%1 graphics + %2 compute, up to "
+               "Forest Temple).")
+                .arg(tot_gfx_s, tot_cmp_s),
             full_ready ? "#059669" : "#2e2e3a", full_ready ? "#11221a" : "#14141b");
         auto* clear_btn = make_action_btn(
             has_any_cache ? tr("🗑  Clear Shader Cache")

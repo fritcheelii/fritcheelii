@@ -11116,6 +11116,42 @@ Error code: %3</source>
             <source>Real gameplay + top recipe shaders (%1 graphics + %2 real compute) for late-game &amp; adult dungeons.</source>
             <translation>Gameplay real + principais shaders da recipe (%1 gráficos + %2 compute reais) para late-game e dungeons adulto.</translation>
         </message>
+        <message>
+            <source>✔  Status: Total Shader Cache Built (%1 real shaders ready)</source>
+            <translation>✔  Status: Shader Cache Total Compilado (%1 shaders reais prontos)</translation>
+        </message>
+        <message>
+            <source>✔  Status: Initial Shader Cache Built (%1 real shaders ready to play!)</source>
+            <translation>✔  Status: Shader Cache Inicial Compilado (%1 shaders reais prontos para jogar!)</translation>
+        </message>
+        <message>
+            <source>⚪  Status: Not pre-built yet (Initial Shader Cache will run on first Play)</source>
+            <translation>⚪  Status: Ainda não pré-compilado (o Shader Cache Inicial rodará no 1º Play)</translation>
+        </message>
+        <message>
+            <source>✔  Initial Shader Cache (%1 shaders)  [BUILT / READY]</source>
+            <translation>✔  Shader Cache Inicial (%1 shaders)  [COMPILADO / PRONTO]</translation>
+        </message>
+        <message>
+            <source>▶  Initial Shader Cache (%1 shaders)</source>
+            <translation>▶  Shader Cache Inicial (%1 shaders)</translation>
+        </message>
+        <message>
+            <source>1st dungeon up to Hyrule Castle (%1 graphics + %2 compute). Fast start &amp; mandatory for Play.</source>
+            <translation>1ª dungeon até chegar ao Castelo (%1 gráficos + %2 compute). Início rápido e obrigatório para Jogar.</translation>
+        </message>
+        <message>
+            <source>✔  Total Shader Cache (%1 shaders)  [BUILT / READY]</source>
+            <translation>✔  Shader Cache Total (%1 shaders)  [COMPILADO / PRONTO]</translation>
+        </message>
+        <message>
+            <source>▶  Total Shader Cache (%1 shaders)</source>
+            <translation>▶  Shader Cache Total (%1 shaders)</translation>
+        </message>
+        <message>
+            <source>All real-gameplay shaders collected so far (%1 graphics + %2 compute, up to Forest Temple).</source>
+            <translation>Todos os shaders reais coletados até o momento (%1 gráficos + %2 compute, até o Templo da Floresta).</translation>
+        </message>
     </context>
     <context>
         <name>RecommendedSettingsDialog</name>

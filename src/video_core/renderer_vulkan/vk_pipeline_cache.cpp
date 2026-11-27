@@ -1735,10 +1735,12 @@ std::shared_ptr<PipelineCache::RecipeRun> PipelineCache::AddRecipeJobs(
         } else {
             offsets.reserve(entries.size());
             for (const auto& entry : entries) {
-                offsets.push_back(entry.offset);
+                if (!entry.compute) {
+                    offsets.push_back(entry.offset);
+                }
             }
             LOG_INFO(Render_Vulkan,
-                     "Shader recipe (Full Cache 100%): selected all {} pipelines from {}",
+                     "Shader recipe (Total Real Cache): selected all {} graphics pipelines from {}",
                      offsets.size(), name);
         }
         run->records = static_cast<u32>(offsets.size());
@@ -2210,7 +2212,9 @@ void PipelineCache::PrecacheShaders(u64 title_id, std::vector<PrecacheJob> jobs,
                 ++file_entries;
                 const VideoCommon::OotComputeMeta* meta =
                     is_oot ? VideoCommon::FindOotComputeMeta(key.unique_hash) : nullptr;
-                if (is_oot && meta == nullptr) {
+                if (is_oot &&
+                    (meta == nullptr ||
+                     (!full_precache && !VideoCommon::IsOotInitialCompute(key.unique_hash)))) {
                     continue;
                 }
                 if (meta != nullptr) {
@@ -4123,6 +4127,14 @@ u64 FastEssentialGraphicsCount() noexcept {
 }
 
 u64 FastEssentialComputeCount() noexcept {
+    return VideoCommon::OotInitialComputeHashes.size();
+}
+
+u64 TotalRealGraphicsCount() noexcept {
+    return VideoCommon::OotTotalRealGraphicsCount;
+}
+
+u64 TotalRealComputeCount() noexcept {
     return VideoCommon::OOT_COMPUTE_META.size();
 }
 
