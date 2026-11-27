@@ -23,6 +23,7 @@ on:
       - ".patch/**"
       - "cpmfile.json"
       - "*.profdata"
+      - "*.profraw.gz"
       - ".github/workflows/release-binaries.yml"
 
 permissions:
@@ -72,11 +73,13 @@ jobs:
           - platform: windows-x86_64-pgo
             runner: windows-2022
             pgo: true
-            profile: cheezyemu-windows.profdata
+            profile: fritcheelii-windows.profdata
+            profraw_gz: fritcheelii-windows.profraw.gz
           - platform: linux-x86_64
             runner: ubuntu-24.04
             pgo: false
             profile: ""
+            profraw_gz: ""
 
     steps:
       - name: Check out source
@@ -87,7 +90,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -s "${{ matrix.profile }}"
+          if [ -n "${{ matrix.profraw_gz }}" ]; then
+            test -s "${{ matrix.profraw_gz }}"
+          else
+            test -s "${{ matrix.profile }}"
+          fi
 
       # ── Windows setup ──────────────────────────────────────────────────────
       - name: Set up MSVC
@@ -98,6 +105,16 @@ jobs:
         if: startsWith(matrix.platform, 'windows')
         shell: pwsh
         run: ./tools/windows/install-llvm.ps1
+
+      - name: Merge custom Windows PGO profile
+        if: startsWith(matrix.platform, 'windows') && matrix.pgo && matrix.profraw_gz != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          gzip -dc "${{ matrix.profraw_gz }}" > fritcheelii-windows.profraw
+          "$LLVM_ROOT/bin/llvm-profdata.exe" merge -output="${{ matrix.profile }}" fritcheelii-windows.profraw
+          rm -f fritcheelii-windows.profraw
+          ls -lh "${{ matrix.profile }}"
 
       - name: Install Qt on Windows
         if: startsWith(matrix.platform, 'windows')
@@ -191,10 +208,10 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: .sccache
-          key: objects-${{ matrix.platform }}-${{ hashFiles(matrix.profile) }}-v2-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: objects-${{ matrix.platform }}-${{ hashFiles(matrix.profraw_gz) }}-v2-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            objects-${{ matrix.platform }}-${{ hashFiles(matrix.profile) }}-v2-${{ github.sha }}-
-            objects-${{ matrix.platform }}-${{ hashFiles(matrix.profile) }}-v2-
+            objects-${{ matrix.platform }}-${{ hashFiles(matrix.profraw_gz) }}-v2-${{ github.sha }}-
+            objects-${{ matrix.platform }}-${{ hashFiles(matrix.profraw_gz) }}-v2-
 
       - name: Restore compiler objects (Linux)
         if: startsWith(matrix.platform, 'linux')
@@ -447,6 +464,7 @@ jobs:
           > **Updating from an older version?** Keep or copy your existing \`user\` folder into the new FritCheeLii folder to preserve your saves, settings, and compiled shader cache (no need to rebuild shaders!).
 
           ## What's New in v6.2
+          - **Custom FritCheeLii Windows PGO Profile (\`fritcheelii-windows.profdata\`):** Recorded directly on real *Ocarina of Time* gameplay across Hyrule Castle/Market, Hyrule Field/Lon Lon, Kokiri Forest, Kakariko Village, and Dodongo's Cavern with all 13 \`Extra+\` optimizations active
           - **First-Launch Language Selector:** Prompts on first launch (pre-selected from your OS locale) to configure both emulator menus and the in-game *Ocarina of Time* language in one step
           - **Multi-Save ALL Slots Backup & Restore (Slots 1–8):** Import and export all 8 Multi-Save slots (plus names & active slot) at once via portable folder or \`.zip\` backup
           - **Graphics Tab Polish & Fixes:** Fixed \`NVIDIA DLSS Frame Gen\` visibility in the Windows dropdown, fixed clipped status text in the \`NVIDIA DLSS\` panel, aligned \`Upscaling Method\` 50/50, moved \`Frame Generation (Built-in)\` directly under \`Upscaling & 3D Render Scale\`, added explanatory tooltips, and reordered upscaling presets cleanly

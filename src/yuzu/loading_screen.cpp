@@ -206,8 +206,10 @@ LoadingScreen::LoadingScreen(QWidget* parent)
     ui->banner->setStyleSheet(QStringLiteral("background: transparent;"));
     ui->stage->setStyleSheet(QStringLiteral(
         "background: transparent; color: #FFF4DA; font-size: 18pt; font-weight: bold;"));
+    ui->stage->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
     ui->value->setStyleSheet(
         QStringLiteral("background: transparent; color: #E8D9B5; font-size: 12pt;"));
+    ui->value->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
     // The progress bar's values drive the cheese bar drawn in its place; its frames move the
     // backdrop too.
     scene = std::make_shared<CheezyBackdrop::Scene>();
@@ -262,7 +264,7 @@ LoadingScreen::LoadingScreen(QWidget* parent)
         {VideoCore::LoadCallbackStage::Build, tr("Loading saved shaders %1 / %2")},
         {VideoCore::LoadCallbackStage::Complete, tr("Here we go!")},
         {VideoCore::LoadCallbackStage::Warm,
-         tr("Building shaders %1 / %2 (Just this once — If you close, progress will continue from "
+         tr("Building shaders %1 / %2\n(Just this once — If you close, progress will continue from "
             "where it stopped.)")},
     };
     progressbar_style = {

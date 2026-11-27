@@ -6973,8 +6973,10 @@ Mensagem de Depuração: </translation>
             <translation>Coletando os shaders deste jogo (apenas uma vez, só um momento)...</translation>
         </message>
         <message>
-            <source>Building shaders %1 / %2 (Just this once — If you close, progress will continue from where it stopped.)</source>
-            <translation>Compilando shaders %1 / %2 (Apenas desta vez — Caso você feche, o progresso continuará de onde parou.)</translation>
+            <source>Building shaders %1 / %2
+(Just this once — If you close, progress will continue from where it stopped.)</source>
+            <translation>Compilando shaders %1 / %2
+(Apenas desta vez — Caso você feche, o progresso continuará de onde parou.)</translation>
         </message>
         <message>
             <source>Tip: Shaders, saves &amp; settings are saved in the 'user' folder — keep or copy 'user' when updating FritCheeLii so you never have to rebuild.</source>
