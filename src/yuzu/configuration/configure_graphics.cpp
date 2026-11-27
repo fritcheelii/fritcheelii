@@ -461,6 +461,7 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
 
         auto* upscale_hint = new QLabel(oot_scale_box);
         upscale_hint->setWordWrap(true);
+        upscale_hint->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::MinimumExpanding);
         box_layout->addWidget(upscale_hint);
 
         const auto update_upscale_ui = [=](int choice) {
@@ -502,6 +503,8 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
                        "game restart."));
                 break;
             }
+            upscale_hint->adjustSize();
+            upscale_hint->updateGeometry();
         };
 
         int initial_choice = UpscaleNone;
@@ -553,23 +556,27 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
 
     // Hide rather than disable, a disabled widget would read as using the global value
     {
-        const auto update_fg_visibility = [frame_gen_checkbox, fg_type_combo, &hold_graphics]() {
+        std::vector<std::pair<u32, QWidget*>> fg_sub_widgets;
+        for (const u32 id : {Settings::values.frame_gen_type.Id(),
+                             Settings::values.amd_frame_gen_version.Id(),
+                             Settings::values.frame_gen_multiplier.Id(),
+                             Settings::values.frame_gen_target_rate.Id(),
+                             Settings::values.frame_gen_flow_scale_auto.Id(),
+                             Settings::values.frame_gen_flow_scale.Id(),
+                             Settings::values.frame_gen_queue_target.Id()}) {
+            if (const auto it = hold_graphics.find(id); it != hold_graphics.end()) {
+                fg_sub_widgets.emplace_back(id, it->second);
+            }
+        }
+        const auto update_fg_visibility = [frame_gen_checkbox, fg_type_combo, fg_sub_widgets]() {
             const bool fg_on = frame_gen_checkbox == nullptr || frame_gen_checkbox->isChecked();
             const bool is_amd_fsr =
                 fg_type_combo != nullptr &&
                 fg_type_combo->currentData().toInt() == static_cast<int>(Settings::FrameGenType::AmdFsr);
-            for (const u32 id : {Settings::values.frame_gen_type.Id(),
-                                 Settings::values.amd_frame_gen_version.Id(),
-                                 Settings::values.frame_gen_multiplier.Id(),
-                                 Settings::values.frame_gen_target_rate.Id(),
-                                 Settings::values.frame_gen_flow_scale_auto.Id(),
-                                 Settings::values.frame_gen_flow_scale.Id(),
-                                 Settings::values.frame_gen_queue_target.Id()}) {
-                if (const auto it = hold_graphics.find(id); it != hold_graphics.end()) {
-                    const bool visible =
-                        fg_on && (id != Settings::values.amd_frame_gen_version.Id() || is_amd_fsr);
-                    it->second->setVisible(visible);
-                }
+            for (const auto& [id, w] : fg_sub_widgets) {
+                const bool visible =
+                    fg_on && (id != Settings::values.amd_frame_gen_version.Id() || is_amd_fsr);
+                w->setVisible(visible);
             }
         };
         update_fg_visibility();

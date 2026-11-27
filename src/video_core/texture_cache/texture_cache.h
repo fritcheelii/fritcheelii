@@ -251,7 +251,11 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
             allow_aggressive && (out_of_memory || used_memory() >= critical_memory);
         ticks_to_destroy = aggressive_mode ? 10ULL : high_priority_mode ? 25ULL : 50ULL;
         if (!out_of_memory && used_memory() < critical_memory + 512_MiB) {
-            ticks_to_destroy = (std::max)(ticks_to_destroy, min_age);
+            const u64 effective_min_age =
+                (smart_gc_4gb && used_memory() >= critical_memory)
+                    ? (std::min)(min_age, u64{90})
+                    : min_age;
+            ticks_to_destroy = (std::max)(ticks_to_destroy, effective_min_age);
         }
         // Fritchii v6.2 Thrash Guard: keep hot textures used in the last 12 frames alive under
         // 4 GB VRAM pressure so they are not deleted and recreated dozens of times per frame.
@@ -259,8 +263,11 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
             ticks_to_destroy = (std::max)(ticks_to_destroy, u64{12});
         }
         num_iterations = aggressive_mode ? 40 : (high_priority_mode ? 20 : 10);
-        // NX2navi v0.10.1 pressure relief: drain dead render targets faster past expected budget.
-        if (smart_gc_4gb && high_priority_mode) {
+        // Smooth 4 GB VRAM GC: drain dead/old textures incrementally across frames instead of
+        // dumping up to 80 textures in one ~238 ms stutter spike on area boundaries.
+        if (smart_gc_4gb && !out_of_memory) {
+            num_iterations = aggressive_mode ? 24 : (high_priority_mode ? 20 : 10);
+        } else if (smart_gc_4gb && high_priority_mode) {
             num_iterations *= 2;
         }
     };
@@ -297,10 +304,11 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
         --num_iterations;
         if (must_download) {
             // As DownloadMemory: a batch is capped so the staging memory held at once stays bounded.
-            constexpr size_t MaxBatchBytes = 64_MiB;
+            const size_t max_batch_bytes =
+                (smart_gc_4gb && !out_of_memory) ? 16_MiB : 64_MiB;
             // The batch is flushed after the passes only: deleting images while the LRU walk or
             // the candidate list still refer to them is not safe. A full batch waits a frame.
-            if (!pending.empty() && pending_bytes + image.unswizzled_size_bytes > MaxBatchBytes) {
+            if (!pending.empty() && pending_bytes + image.unswizzled_size_bytes > max_batch_bytes) {
                 return false;
             }
             // Copies still in flight hold their staging memory: at most 256 MiB of them.

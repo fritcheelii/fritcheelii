@@ -263,9 +263,7 @@ LoadingScreen::LoadingScreen(QWidget* parent)
         {VideoCore::LoadCallbackStage::Prepare, tr("Getting your game ready...")},
         {VideoCore::LoadCallbackStage::Build, tr("Loading saved shaders %1 / %2")},
         {VideoCore::LoadCallbackStage::Complete, tr("Here we go!")},
-        {VideoCore::LoadCallbackStage::Warm,
-         tr("Building shaders %1 / %2\n(Just this once — If you close, progress will continue from "
-            "where it stopped.)")},
+        {VideoCore::LoadCallbackStage::Warm, tr("Building shaders %1 / %2 (Just this once)")},
     };
     progressbar_style = {
         {VideoCore::LoadCallbackStage::Prepare, PROGRESSBAR_STYLE_PREPARE},
@@ -440,7 +438,8 @@ void LoadingScreen::OnLoadProgress(VideoCore::LoadCallbackStage stage, std::size
     if (stage == VideoCore::LoadCallbackStage::Warm ||
         stage == VideoCore::LoadCallbackStage::Build) {
         const QString tip =
-            tr("Tip: Shaders, saves & settings are saved in the 'user' folder — keep or copy "
+            tr("Tip 1: If you close, progress will continue from where it stopped.\n"
+               "Tip 2: Shaders, saves & settings are saved in the 'user' folder — keep or copy "
                "'user' when updating FritCheeLii so you never have to rebuild.");
         estimate = estimate.isEmpty() ? tip : estimate + QStringLiteral("\n\n") + tip;
     }

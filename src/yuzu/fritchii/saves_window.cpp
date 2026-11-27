@@ -1353,7 +1353,7 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
         v->addWidget(dst_combo);
 
         auto* btns = new QHBoxLayout;
-        auto* ok_btn = new QPushButton(QObject::tr("Continue"), &pick);
+        auto* ok_btn = new QPushButton(QObject::tr("Export"), &pick);
         auto* cancel_btn = new QPushButton(QObject::tr("Cancel"), &pick);
         btns->addStretch(1);
         btns->addWidget(ok_btn);
@@ -1441,10 +1441,6 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                 }
                 if (!emu_dst.empty() && src_slot == 0) {
                     const auto backup_path = BackupPath(emu_dst);
-                    if (!confirm(QObject::tr("Export FritCheeLii saves to:\n%1?").arg(Text(emu_dst)),
-                                 backup_path)) {
-                        return;
-                    }
                     const auto backup = Backup(emu_dst, backup_path);
                     const int games = CopySaves(fritchii, emu_dst);
                     Done(&dialog, games, backup);
@@ -1465,10 +1461,6 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                     dst = existing;
                 }
                 const auto backup_path = BackupPath(fritchii);
-                if (!confirm(QObject::tr("Export Ocarina of Time save to:\n%1?").arg(Text(dst)),
-                             backup_path)) {
-                    return;
-                }
                 const auto backup = Backup(dst, backup_path);
                 SyncDirCopy(src_oot, dst);
                 if (const fs::path tx = TriforceTxDir(dst); !tx.empty() && fs::exists(tx)) {
@@ -1480,11 +1472,6 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                 const DetectedSaveSource& target = detected[static_cast<size_t>(choice.toInt())];
                 if (!target.emu_save_root.empty() && src_slot == 0) {
                     const auto backup_path = BackupPath(target.emu_save_root);
-                    if (!confirm(QObject::tr("Export FritCheeLii saves to %1? Close %1 first.")
-                                     .arg(target.name),
-                                 backup_path)) {
-                        return;
-                    }
                     const auto backup = Backup(target.emu_save_root, backup_path);
                     const int games = CopySaves(fritchii, target.emu_save_root);
                     Done(&dialog, games, backup);
@@ -1500,11 +1487,6 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                             ? target.oot_dir
                             : (ActiveProfileDir(target.emu_save_root) / OOT_TITLE_HEX);
                     const auto backup_path = BackupPath(fritchii);
-                    if (!confirm(QObject::tr("Export Ocarina of Time save to %1? Close %1 first.")
-                                     .arg(target.name),
-                                 backup_path)) {
-                        return;
-                    }
                     const auto backup = Backup(dst, backup_path);
                     SyncDirCopy(src_oot, dst);
                     if (target.is_triforce) {
@@ -1638,7 +1620,7 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
         v->addWidget(dst_slot_combo);
 
         auto* btns = new QHBoxLayout;
-        auto* ok_btn = new QPushButton(QObject::tr("Continue"), &pick);
+        auto* ok_btn = new QPushButton(QObject::tr("Import"), &pick);
         auto* cancel_btn = new QPushButton(QObject::tr("Cancel"), &pick);
         btns->addStretch(1);
         btns->addWidget(ok_btn);
@@ -1654,19 +1636,12 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
         const int target_slot = dst_slot_combo->currentData().toInt();
         const fs::path temp = fritchii.parent_path().parent_path() / "save-import";
 
-        const auto apply_multi_slots_import = [&](const fs::path& src_slots, const QString& label) {
+        const auto apply_multi_slots_import = [&](const fs::path& src_slots, const QString&) {
             const int src_count = CountPopulatedMultiSlots(src_slots);
             if (src_count <= 0) {
                 return false;
             }
             const auto backup_path = BackupPath(fritchii);
-            if (!confirm(QObject::tr("Import ALL %1 Multi-Save Slots (Slots 1–8) from %2 into "
-                                     "FritCheeLii?")
-                             .arg(src_count)
-                             .arg(label),
-                         backup_path)) {
-                return true;
-            }
             const auto backup = Backup(fritchii, backup_path);
             int copied = 0;
             for (int i = 1; i <= 8; ++i) {
@@ -1692,18 +1667,11 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
             return true;
         };
 
-        const auto apply_oot_import = [&](const fs::path& src_oot, const QString& label) {
+        const auto apply_oot_import = [&](const fs::path& src_oot, const QString&) {
             const QString stamp =
                 QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm"));
             if (target_slot == 0) {
                 const auto backup_path = BackupPath(fritchii);
-                if (!confirm(QObject::tr("Import Ocarina of Time save from %1 into your active "
-                                         "FritCheeLii campaign (Slot %2)?")
-                                 .arg(label)
-                                 .arg(active),
-                             backup_path)) {
-                    return;
-                }
                 const auto backup = Backup(fritchii, backup_path);
                 const fs::path target_nand = OotActiveNandDir(fritchii);
                 SyncDirCopy(src_oot, target_nand);
@@ -1717,12 +1685,6 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                 const fs::path sdir = slots_root / fmt::format("slot_{}", target_slot);
                 const fs::path sdata = sdir / "data";
                 const auto backup_path = BackupPath(fritchii);
-                if (!confirm(QObject::tr("Import Ocarina of Time save from %1 into Slot %2?")
-                                 .arg(label)
-                                 .arg(target_slot),
-                             backup_path)) {
-                    return;
-                }
                 const auto backup =
                     DirHasFiles(sdata) ? Backup(sdata, backup_path) : Backup(fritchii, backup_path);
                 SyncDirCopy(src_oot, sdata);
@@ -1775,10 +1737,6 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                     throw std::runtime_error("no compatible saves in that zip file");
                 }
                 const auto backup_path = BackupPath(fritchii);
-                if (!confirm(QObject::tr("Import these saves into FritCheeLii?"), backup_path)) {
-                    fs::remove_all(temp);
-                    return;
-                }
                 const auto backup = Backup(fritchii, backup_path);
                 const int games = CopySaves(root, fritchii);
                 fs::remove_all(temp);
@@ -1821,10 +1779,6 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                         "Select a Triforce, NX2navi, Ryujinx, or Yuzu/Eden/Lichii save folder.");
                 }
                 const auto backup_path = BackupPath(fritchii);
-                if (!confirm(QObject::tr("Import saves from this folder into FritCheeLii?"),
-                             backup_path)) {
-                    return;
-                }
                 const auto backup = Backup(fritchii, backup_path);
                 const int games = CopySaves(emu_root, fritchii);
                 refresh_slots();
@@ -1837,11 +1791,6 @@ void ShowSavesWindow(QWidget* parent, const std::function<bool()>& emulation_run
                     apply_oot_import(source.oot_dir, source.name);
                 } else if (!source.emu_save_root.empty() && !Profiles(source.emu_save_root).empty()) {
                     const auto backup_path = BackupPath(fritchii);
-                    if (!confirm(QObject::tr("Import saves from %1 into FritCheeLii?")
-                                     .arg(source.name),
-                                 backup_path)) {
-                        return;
-                    }
                     const auto backup = Backup(fritchii, backup_path);
                     const int games = CopySaves(source.emu_save_root, fritchii);
                     refresh_slots();
