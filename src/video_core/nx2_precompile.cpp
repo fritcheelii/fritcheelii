@@ -220,8 +220,9 @@ std::optional<Recipe> FindRecipe(u64 title_id, const std::filesystem::path& titl
     return std::nullopt;
 }
 
-std::filesystem::path EnsurePrecompiledFile(u64 title_id, const std::filesystem::path& title_dir,
-                                            u32 cache_version, std::stop_token stop) {
+std::filesystem::path EnsurePrecompiledFile(
+    u64 title_id, const std::filesystem::path& title_dir, u32 cache_version, std::stop_token stop,
+    std::function<void(u64 done, u64 total)> on_progress) {
     const auto precompiled = PrecompiledPath(title_dir, cache_version);
     std::error_code error;
     const bool have_file = std::filesystem::exists(precompiled, error);
@@ -280,7 +281,28 @@ std::filesystem::path EnsurePrecompiledFile(u64 title_id, const std::filesystem:
     std::vector<u8> assembled;
     Nx2Recipe::Report report;
     try {
-        const auto programs = FileSys::Nx2ShaderExtract::Extract(roots, Threads(), nullptr, stop);
+        FileSys::Nx2ShaderExtract::Progress extract_progress;
+        std::stop_source progress_stop;
+        std::jthread progress_thread;
+        if (on_progress) {
+            progress_thread = std::jthread([&, st = progress_stop.get_token()] {
+                while (!st.stop_requested() && !stop.stop_requested()) {
+                    const u64 total = extract_progress.files_total;
+                    if (total > 0) {
+                        const u64 done =
+                            extract_progress.files_done.load(std::memory_order_relaxed);
+                        on_progress(done, total);
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+            });
+        }
+        const auto programs =
+            FileSys::Nx2ShaderExtract::Extract(roots, Threads(), &extract_progress, stop);
+        progress_stop.request_stop();
+        if (progress_thread.joinable()) {
+            progress_thread.join();
+        }
         if (stop.stop_requested()) {
             return {};
         }

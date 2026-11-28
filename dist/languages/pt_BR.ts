@@ -11152,6 +11152,33 @@ Error code: %3</source>
             <source>All real-gameplay shaders collected so far (%1 graphics + %2 compute, up to Forest Temple).</source>
             <translation>Todos os shaders reais coletados até o momento (%1 gráficos + %2 compute, até o Templo da Floresta).</translation>
         </message>
+        <message>
+            <source>Choose Shader Cache — First Launch</source>
+            <translation>Escolher Shader Cache — Primeiro Início</translation>
+        </message>
+        <message>
+            <source>&lt;b&gt;Choose which Shader Cache to build on first launch:&lt;/b&gt;</source>
+            <translation>&lt;b&gt;Escolha qual Shader Cache compilar no primeiro início:&lt;/b&gt;</translation>
+        </message>
+        <message>
+            <source>1st dungeon up to Hyrule Castle (%1 graphics + %2 compute). Faster first boot.</source>
+            <translation>1ª dungeon até chegar ao Castelo (%1 gráficos + %2 compute). Primeiro início mais rápido.</translation>
+        </message>
+        <message>
+            <source>All real-gameplay shaders collected so far (%1 graphics + %2 compute, up to Forest Temple). Fewer stutters after 1st dungeon.</source>
+            <translation>Todos os shaders reais coletados até o momento (%1 gráficos + %2 compute, até o Templo da Floresta). Menos travamentos após a 1ª dungeon.</translation>
+        </message>
+    </context>
+    <context>
+        <name>LoadingScreen</name>
+        <message>
+            <source>Gathering this game&apos;s shaders %1 / %2 (Just this once)</source>
+            <translation>Coletando os shaders deste jogo %1 / %2 (Apenas desta vez)</translation>
+        </message>
+        <message>
+            <source>Tip 3: For fewer &apos;Building shader&apos; stutters after the 1st dungeon (Deku Tree) and Castle, select Total Shader Cache in the &apos;Shader Cache&apos; button on Home.</source>
+            <translation>Dica 3: Para menos travamentos (&apos;Building shader&apos;) após a 1ª dungeon (Árvore Deku) e o Castelo, escolha o Shader Cache Total no botão &apos;Shader Cache&apos; da tela inicial.</translation>
+        </message>
     </context>
     <context>
         <name>RecommendedSettingsDialog</name>

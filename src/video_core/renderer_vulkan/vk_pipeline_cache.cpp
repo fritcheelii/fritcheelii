@@ -1433,7 +1433,13 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
                 callback(VideoCore::LoadCallbackStage::Warm, 0, 0);
             }
             const auto file = VideoCommon::Nx2Precompile::EnsurePrecompiledFile(
-                title_id, base_dir, CACHE_VERSION, stop_loading);
+                title_id, base_dir, CACHE_VERSION, stop_loading,
+                [&](u64 done, u64 total) {
+                    if (callback && total > 0) {
+                        callback(VideoCore::LoadCallbackStage::Prepare, static_cast<size_t>(done),
+                                 static_cast<size_t>(total));
+                    }
+                });
             if (!file.empty() && !stop_loading.stop_requested()) {
                 recipe = AddRecipeJobs(file, precache_graphics, precached_pipelines);
             }

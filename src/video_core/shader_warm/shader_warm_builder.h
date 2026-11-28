@@ -97,9 +97,11 @@ enum class StandaloneBuildMode : u8 {
 };
 
 void SetStandaloneBuildMode(StandaloneBuildMode mode);
+void SetPlayFullCache(bool full);
 [[nodiscard]] StandaloneBuildMode GetStandaloneBuildMode();
 [[nodiscard]] bool IsStandaloneBuildOnly();
 [[nodiscard]] bool IsFullCacheRequested();
+[[nodiscard]] bool IsOotTotalCacheBuilt();
 [[nodiscard]] u64 FastEssentialGraphicsCount() noexcept;
 [[nodiscard]] u64 FastEssentialComputeCount() noexcept;
 [[nodiscard]] u64 TotalRealGraphicsCount() noexcept;

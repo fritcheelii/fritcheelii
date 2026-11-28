@@ -548,6 +548,86 @@ QWidget* Home::MakePage() {
         if (hero_path.isEmpty()) {
             hooks.add_folder();
         } else {
+            VideoCommon::ShaderWarm::SetPlayFullCache(false);
+            if (hero_id == OcarinaOfTime &&
+                Settings::values.precache_shaders.GetValue() != Settings::PrecacheShaders::Off &&
+                !VideoCommon::ShaderWarm::IsOotTotalCacheBuilt()) {
+                const auto shader_dir = Common::FS::GetEdenPath(Common::FS::EdenPath::ShaderDir) /
+                                        fmt::format("{:016x}", OcarinaOfTime);
+                u64 recipe_done = 0;
+                {
+                    std::ifstream rec_in(shader_dir / "precompiled.fork-v54.done");
+                    u64 sz = 0;
+                    s64 wt = 0;
+                    rec_in >> sz >> wt >> recipe_done;
+                }
+                if (recipe_done == 0) {
+                    const u64 init_gfx = VideoCommon::ShaderWarm::FastEssentialGraphicsCount();
+                    const u64 init_cmp = VideoCommon::ShaderWarm::FastEssentialComputeCount();
+                    const u64 init_total = init_gfx + init_cmp;
+                    const u64 tot_gfx = VideoCommon::ShaderWarm::TotalRealGraphicsCount();
+                    const u64 tot_cmp = VideoCommon::ShaderWarm::TotalRealComputeCount();
+                    const u64 tot_total = tot_gfx + tot_cmp;
+                    const QLocale loc;
+
+                    QDialog dlg(window);
+                    dlg.setWindowTitle(tr("Choose Shader Cache — First Launch"));
+                    dlg.setWindowFlag(Qt::WindowContextHelpButtonHint, false);
+                    dlg.setMinimumWidth(480);
+                    auto* vb = new QVBoxLayout(&dlg);
+                    vb->setContentsMargins(20, 18, 20, 18);
+                    vb->setSpacing(10);
+                    auto* hdr = new QLabel(
+                        tr("<b>Choose which Shader Cache to build on first launch:</b>"), &dlg);
+                    vb->addWidget(hdr);
+
+                    const auto make_choice_btn = [&](const QString& label, const QString& desc,
+                                                     const char* border_color, const char* bg_color) {
+                        auto* btn = new QPushButton(&dlg);
+                        btn->setCursor(Qt::PointingHandCursor);
+                        btn->setStyleSheet(QStringLiteral(
+                            "QPushButton { background-color: %1; color: #f4f4f0; border: 1px solid %2; "
+                            "border-radius: 8px; padding: 12px 14px; text-align: left; font-size: 13px; "
+                            "font-weight: 600; }"
+                            "QPushButton:hover { border-color: #a78bfa; background-color: #1e1a2e; }")
+                                               .arg(QString::fromLatin1(bg_color),
+                                                    QString::fromLatin1(border_color)));
+                        btn->setText(label + QStringLiteral("\n") + desc);
+                        vb->addWidget(btn);
+                        return btn;
+                    };
+
+                    auto* init_btn = make_choice_btn(
+                        tr("▶  Initial Shader Cache (%1 shaders)")
+                            .arg(loc.toString(static_cast<qulonglong>(init_total))),
+                        tr("1st dungeon up to Hyrule Castle (%1 graphics + %2 compute). Faster first boot.")
+                            .arg(loc.toString(static_cast<qulonglong>(init_gfx)),
+                                 loc.toString(static_cast<qulonglong>(init_cmp))),
+                        "#7c3aed", "#181526");
+                    auto* tot_btn = make_choice_btn(
+                        tr("▶  Total Shader Cache (%1 shaders)")
+                            .arg(loc.toString(static_cast<qulonglong>(tot_total))),
+                        tr("All real-gameplay shaders collected so far (%1 graphics + %2 compute, up to Forest Temple). Fewer stutters after 1st dungeon.")
+                            .arg(loc.toString(static_cast<qulonglong>(tot_gfx)),
+                                 loc.toString(static_cast<qulonglong>(tot_cmp))),
+                        "#2e2e3a", "#14141b");
+
+                    auto* row_cancel = new QHBoxLayout;
+                    row_cancel->addStretch(1);
+                    auto* cancel_btn = new QPushButton(tr("Cancel"), &dlg);
+                    row_cancel->addWidget(cancel_btn);
+                    vb->addLayout(row_cancel);
+
+                    int choice = 0;
+                    connect(init_btn, &QPushButton::clicked, &dlg, [&] { choice = 1; dlg.accept(); });
+                    connect(tot_btn, &QPushButton::clicked, &dlg, [&] { choice = 2; dlg.accept(); });
+                    connect(cancel_btn, &QPushButton::clicked, &dlg, &QDialog::reject);
+                    if (dlg.exec() != QDialog::Accepted || choice == 0) {
+                        return;
+                    }
+                    VideoCommon::ShaderWarm::SetPlayFullCache(choice == 2);
+                }
+            }
             RefreshSaveSlots();
             hooks.play(hero_path, hero_id);
         }

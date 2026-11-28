@@ -425,7 +425,10 @@ void LoadingScreen::OnLoadProgress(VideoCore::LoadCallbackStage stage, std::size
     }
 
     // update labels and progress bar
-    if (stage == VideoCore::LoadCallbackStage::Warm && total == 0) {
+    if (stage == VideoCore::LoadCallbackStage::Prepare && total > 0) {
+        ui->stage->setText(
+            tr("Gathering this game's shaders %1 / %2 (Just this once)").arg(value).arg(total));
+    } else if (stage == VideoCore::LoadCallbackStage::Warm && total == 0) {
         // Before the count is known: the game's files are read for their shader programs.
         ui->stage->setText(tr("Gathering this game's shaders (just once, one moment)..."));
         ui->progress_bar->setRange(0, 0);
@@ -436,17 +439,25 @@ void LoadingScreen::OnLoadProgress(VideoCore::LoadCallbackStage stage, std::size
         ui->stage->setText(stage_translations[stage]);
     }
     if (stage == VideoCore::LoadCallbackStage::Warm ||
-        stage == VideoCore::LoadCallbackStage::Build) {
-        const QString tip =
+        stage == VideoCore::LoadCallbackStage::Build ||
+        (stage == VideoCore::LoadCallbackStage::Prepare && total > 0)) {
+        QString tip =
             tr("Tip 1: If you close, progress will continue from where it stopped.\n"
                "Tip 2: Shaders, saves & settings are saved in the 'user' folder — keep or copy "
                "'user' when updating FritCheeLii so you never have to rebuild.");
+        if (!VideoCommon::ShaderWarm::IsFullCacheRequested() &&
+            !VideoCommon::ShaderWarm::IsOotTotalCacheBuilt()) {
+            tip += QLatin1Char('\n') +
+                   tr("Tip 3: For fewer 'Building shader' stutters after the 1st dungeon (Deku "
+                      "Tree) and Castle, select Total Shader Cache in the 'Shader Cache' button "
+                      "on Home.");
+        }
         estimate = estimate.isEmpty() ? tip : estimate + QStringLiteral("\n\n") + tip;
     }
     ui->value->setText(estimate);
     ui->progress_bar->setValue(static_cast<int>(value));
     auto* const bar = static_cast<CheeseProgress*>(cheese_progress);
-    if (stage == VideoCore::LoadCallbackStage::Prepare) {
+    if (stage == VideoCore::LoadCallbackStage::Prepare && total == 0) {
         bar->SetRange(0, 0); // no length known yet: the gliding piece
     } else {
         bar->SetRange(ui->progress_bar->minimum(), ui->progress_bar->maximum());

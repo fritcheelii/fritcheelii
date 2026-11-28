@@ -279,6 +279,7 @@ void WriteHeader(std::ofstream& out) {
 std::atomic<bool> warm_before_start{false};
 std::atomic<bool> skip_warm{false};
 std::atomic<StandaloneBuildMode> standalone_build_mode{StandaloneBuildMode::None};
+std::atomic<bool> play_full_cache{false};
 
 /// Records `entries` for the finished precache file at `warm_file` (see WarmCountPath).
 void WriteWarmCount(const fs::path& warm_file, u64 entries) {
@@ -380,6 +381,13 @@ bool TakeSkipWarm() {
 
 void SetStandaloneBuildMode(StandaloneBuildMode mode) {
     standalone_build_mode.store(mode, std::memory_order_relaxed);
+    if (mode != StandaloneBuildMode::None) {
+        play_full_cache.store(false, std::memory_order_relaxed);
+    }
+}
+
+void SetPlayFullCache(bool full) {
+    play_full_cache.store(full, std::memory_order_relaxed);
 }
 
 StandaloneBuildMode GetStandaloneBuildMode() {
@@ -391,7 +399,17 @@ bool IsStandaloneBuildOnly() {
 }
 
 bool IsFullCacheRequested() {
-    return standalone_build_mode.load(std::memory_order_relaxed) == StandaloneBuildMode::FullCache;
+    return standalone_build_mode.load(std::memory_order_relaxed) == StandaloneBuildMode::FullCache ||
+           play_full_cache.load(std::memory_order_relaxed);
+}
+
+bool IsOotTotalCacheBuilt() {
+    std::ifstream rec_in(TitleDir(0x0400486024DEC000ULL) / "precompiled.fork-v54.done");
+    u64 sz = 0;
+    s64 wt = 0;
+    u64 entries = 0;
+    rec_in >> sz >> wt >> entries;
+    return entries >= TotalRealGraphicsCount();
 }
 
 fs::path PrecachedPipelinesPath(u64 title_id) {
