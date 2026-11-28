@@ -597,19 +597,21 @@ QWidget* Home::MakePage() {
                         return btn;
                     };
 
+                    auto* tot_btn = make_choice_btn(
+                        tr("▶  Total Shader Cache (%1 shaders) — Recommended")
+                            .arg(loc.toString(static_cast<qulonglong>(tot_total))),
+                        tr("Prioritizes the %1 initial shaders first and continues up to %2 in the "
+                           "background if you click 'Play now'.")
+                            .arg(loc.toString(static_cast<qulonglong>(init_total)),
+                                 loc.toString(static_cast<qulonglong>(tot_total))),
+                        "#7c3aed", "#181526");
                     auto* init_btn = make_choice_btn(
                         tr("▶  Initial Shader Cache (%1 shaders)")
                             .arg(loc.toString(static_cast<qulonglong>(init_total))),
-                        tr("1st dungeon up to Hyrule Castle (%1 graphics + %2 compute). Faster first boot.")
+                        tr("1st dungeon up to Hyrule Castle (%1 graphics + %2 compute). On your "
+                           "next launch you can upgrade to Total.")
                             .arg(loc.toString(static_cast<qulonglong>(init_gfx)),
                                  loc.toString(static_cast<qulonglong>(init_cmp))),
-                        "#7c3aed", "#181526");
-                    auto* tot_btn = make_choice_btn(
-                        tr("▶  Total Shader Cache (%1 shaders)")
-                            .arg(loc.toString(static_cast<qulonglong>(tot_total))),
-                        tr("All real-gameplay shaders collected so far (%1 graphics + %2 compute, up to Forest Temple). Fewer stutters after 1st dungeon.")
-                            .arg(loc.toString(static_cast<qulonglong>(tot_gfx)),
-                                 loc.toString(static_cast<qulonglong>(tot_cmp))),
                         "#2e2e3a", "#14141b");
 
                     auto* row_cancel = new QHBoxLayout;
@@ -626,6 +628,61 @@ QWidget* Home::MakePage() {
                         return;
                     }
                     VideoCommon::ShaderWarm::SetPlayFullCache(choice == 2);
+                } else {
+                    static bool asked_upgrade_this_session = false;
+                    if (!asked_upgrade_this_session) {
+                        asked_upgrade_this_session = true;
+                        const u64 tot_total = VideoCommon::ShaderWarm::TotalRealGraphicsCount() +
+                                              VideoCommon::ShaderWarm::TotalRealComputeCount();
+                        const QLocale loc;
+                        QDialog dlg(window);
+                        dlg.setWindowTitle(tr("Complete Shader Cache Available"));
+                        dlg.setWindowFlag(Qt::WindowContextHelpButtonHint, false);
+                        dlg.setMinimumWidth(460);
+                        auto* vb = new QVBoxLayout(&dlg);
+                        vb->setContentsMargins(20, 18, 20, 18);
+                        vb->setSpacing(10);
+                        vb->addWidget(new QLabel(
+                            tr("<b>Your Initial Shader Cache is ready.</b><br>"
+                               "Would you like to complete the Total Shader Cache (%1 shaders)?")
+                                .arg(loc.toString(static_cast<qulonglong>(tot_total))),
+                            &dlg));
+
+                        const auto make_btn = [&](const QString& label, const QString& desc,
+                                                  const char* border_color, const char* bg_color) {
+                            auto* btn = new QPushButton(&dlg);
+                            btn->setCursor(Qt::PointingHandCursor);
+                            btn->setStyleSheet(QStringLiteral(
+                                "QPushButton { background-color: %1; color: #f4f4f0; border: 1px solid %2; "
+                                "border-radius: 8px; padding: 12px 14px; text-align: left; font-size: 13px; "
+                                "font-weight: 600; }"
+                                "QPushButton:hover { border-color: #a78bfa; background-color: #1e1a2e; }")
+                                                   .arg(QString::fromLatin1(bg_color),
+                                                        QString::fromLatin1(border_color)));
+                            btn->setText(label + QStringLiteral("\n") + desc);
+                            vb->addWidget(btn);
+                            return btn;
+                        };
+
+                        auto* upg_btn = make_btn(
+                            tr("▶  Upgrade to Total Shader Cache (%1 shaders)")
+                                .arg(loc.toString(static_cast<qulonglong>(tot_total))),
+                            tr("Click 'Play now' on the loading screen to keep playing while it "
+                               "finishes in the background (with Pause/Stop controls)."),
+                            "#7c3aed", "#181526");
+                        auto* keep_btn = make_btn(
+                            tr("▶  Play with Initial Cache"),
+                            tr("Enter the game right away without building the extra shaders now."),
+                            "#2e2e3a", "#14141b");
+
+                        int choice = 0;
+                        connect(upg_btn, &QPushButton::clicked, &dlg, [&] { choice = 2; dlg.accept(); });
+                        connect(keep_btn, &QPushButton::clicked, &dlg, [&] { choice = 1; dlg.accept(); });
+                        if (dlg.exec() != QDialog::Accepted || choice == 0) {
+                            return;
+                        }
+                        VideoCommon::ShaderWarm::SetPlayFullCache(choice == 2);
+                    }
                 }
             }
             RefreshSaveSlots();

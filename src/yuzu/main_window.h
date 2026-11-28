@@ -579,6 +579,9 @@ private:
 
     // Status bar elements
     QLabel* message_label = nullptr;
+    QLabel* bg_precache_label = nullptr;
+    QPushButton* bg_precache_pause_btn = nullptr;
+    QPushButton* bg_precache_stop_btn = nullptr;
     QLabel* shader_building_label = nullptr;
     QLabel* res_scale_label = nullptr;
     QLabel* emu_speed_label = nullptr;

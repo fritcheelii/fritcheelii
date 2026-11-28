@@ -7004,6 +7004,14 @@ Tip 2: Shaders, saves &amp; settings are saved in the 'user' folder — keep or 
             <translation>Dica 1: Caso você feche, o progresso continuará de onde parou.
 Dica 2: Os shaders, saves e configurações ficam salvos na pasta 'user' — mantenha ou copie a pasta 'user' ao atualizar o FritCheeLii para não precisar compilar de novo.</translation>
         </message>
+        <message>
+            <source>Play now</source>
+            <translation>Jogar agora</translation>
+        </message>
+        <message>
+            <source>Start the game now and continue preparing the remaining shaders in the background (early-game shaders are prioritized first).</source>
+            <translation>Inicia o jogo agora e continua preparando os shaders restantes em segundo plano (priorizando os shaders do início do jogo primeiro).</translation>
+        </message>
     </context>
     <context>
         <name>Lobby</name>
@@ -11168,16 +11176,52 @@ Error code: %3</source>
             <source>All real-gameplay shaders collected so far (%1 graphics + %2 compute, up to Forest Temple). Fewer stutters after 1st dungeon.</source>
             <translation>Todos os shaders reais coletados até o momento (%1 gráficos + %2 compute, até o Templo da Floresta). Menos travamentos após a 1ª dungeon.</translation>
         </message>
+        <message>
+            <source>▶  Total Shader Cache (%1 shaders) — Recommended</source>
+            <translation>▶  Shader Cache Total (%1 shaders) — Recomendado</translation>
+        </message>
+        <message>
+            <source>Prioritizes the %1 initial shaders first and continues up to %2 in the background if you click 'Play now'.</source>
+            <translation>Prioriza primeiro os %1 shaders iniciais e continua até %2 em segundo plano se você clicar em 'Jogar agora'.</translation>
+        </message>
+        <message>
+            <source>1st dungeon up to Hyrule Castle (%1 graphics + %2 compute). On your next launch you can upgrade to Total.</source>
+            <translation>1ª dungeon até o Castelo de Hyrule (%1 gráficos + %2 compute). No próximo carregamento você pode atualizar para o Total.</translation>
+        </message>
+        <message>
+            <source>Complete Shader Cache Available</source>
+            <translation>Shader Cache Completo Disponível</translation>
+        </message>
+        <message>
+            <source>&lt;b&gt;Your Initial Shader Cache is ready.&lt;/b&gt;&lt;br&gt;Would you like to complete the Total Shader Cache (%1 shaders)?</source>
+            <translation>&lt;b&gt;Seu Shader Cache Inicial já está pronto.&lt;/b&gt;&lt;br&gt;Deseja completar o Shader Cache Total (%1 shaders)?</translation>
+        </message>
+        <message>
+            <source>▶  Upgrade to Total Shader Cache (%1 shaders)</source>
+            <translation>▶  Atualizar para Shader Cache Total (%1 shaders)</translation>
+        </message>
+        <message>
+            <source>Click 'Play now' on the loading screen to keep playing while it finishes in the background (with Pause/Stop controls).</source>
+            <translation>Clique em 'Jogar agora' na tela de carregamento para ir jogando enquanto termina em segundo plano (com botões de Pausar/Parar).</translation>
+        </message>
+        <message>
+            <source>▶  Play with Initial Cache</source>
+            <translation>▶  Jogar com o Cache Inicial</translation>
+        </message>
+        <message>
+            <source>Enter the game right away without building the extra shaders now.</source>
+            <translation>Entrar no jogo na hora sem compilar os shaders extras agora.</translation>
+        </message>
     </context>
     <context>
         <name>LoadingScreen</name>
         <message>
-            <source>Gathering this game&apos;s shaders %1 / %2 (Just this once)</source>
+            <source>Gathering this game's shaders %1 / %2 (Just this once)</source>
             <translation>Coletando os shaders deste jogo %1 / %2 (Apenas desta vez)</translation>
         </message>
         <message>
-            <source>Tip 3: For fewer &apos;Building shader&apos; stutters after the 1st dungeon (Deku Tree) and Castle, select Total Shader Cache in the &apos;Shader Cache&apos; button on Home.</source>
-            <translation>Dica 3: Para menos travamentos (&apos;Building shader&apos;) após a 1ª dungeon (Árvore Deku) e o Castelo, escolha o Shader Cache Total no botão &apos;Shader Cache&apos; da tela inicial.</translation>
+            <source>Tip 3: For fewer 'Building shader' stutters after the 1st dungeon (Deku Tree) and Castle, select Total Shader Cache in the 'Shader Cache' button on Home.</source>
+            <translation>Dica 3: Para menos travamentos ('Building shader') após a 1ª dungeon (Árvore Deku) e o Castelo, escolha o Shader Cache Total no botão 'Shader Cache' da tela inicial.</translation>
         </message>
     </context>
     <context>
@@ -11193,7 +11237,7 @@ Error code: %3</source>
         <message>
             <source>%1
 
-These configure performance options, AMD FSR, frame generation, and Ocarina of Time&apos;s render size. You can return to defaults via Help &gt; Restore Default Settings.</source>
+These configure performance options, AMD FSR, frame generation, and Ocarina of Time's render size. You can return to defaults via Help &gt; Restore Default Settings.</source>
             <translation>%1
 
 Isso ajusta opções de desempenho, AMD FSR, Frame Generation e a resolução de renderização de Ocarina of Time. Você pode voltar ao padrão em Ajuda &gt; Restaurar Configurações Padrão.</translation>
@@ -11255,7 +11299,7 @@ Isso ajusta opções de desempenho, AMD FSR, Frame Generation e a resolução de
             <translation>Configurações padrão</translation>
         </message>
         <message>
-            <source>Your settings already match FritCheeLii&apos;s default settings.</source>
+            <source>Your settings already match FritCheeLii's default settings.</source>
             <translation>Suas configurações já correspondem ao padrão do FritCheeLii.</translation>
         </message>
         <message>
@@ -11320,6 +11364,45 @@ para um slot escolhido ou para todos os slots Multi-Save.</translation>
 switching, clearing, or importing saves.</source>
             <translation>Abre a pasta de backups automáticos criados antes de
 trocar, limpar ou importar saves.</translation>
+        </message>
+    </context>
+    <context>
+        <name>GMainWindow</name>
+        <message>
+            <source>Preparing remaining shaders in the background on 1 low-priority thread.</source>
+            <translation>Preparando os shaders restantes em segundo plano em 1 thread de baixa prioridade.</translation>
+        </message>
+        <message>
+            <source>Pause or resume background shader compilation.</source>
+            <translation>Pausar ou retomar a compilação de shaders em segundo plano.</translation>
+        </message>
+        <message>
+            <source>Stop background shader compilation now. Everything already built is saved and resumes automatically on your next launch.</source>
+            <translation>Parar a compilação de shaders em segundo plano agora. Tudo o que já foi compilado fica salvo e retoma automaticamente na próxima vez que você abrir o jogo.</translation>
+        </message>
+        <message>
+            <source>Stopping shader cache...</source>
+            <translation>Parando cache de shaders...</translation>
+        </message>
+        <message>
+            <source>Shaders paused (%1%)</source>
+            <translation>Shaders pausados (%1%)</translation>
+        </message>
+        <message>
+            <source>Preparing shaders %1% (Initial)</source>
+            <translation>Preparando shaders %1% (Inicial)</translation>
+        </message>
+        <message>
+            <source>Preparing shaders %1%</source>
+            <translation>Preparando shaders %1%</translation>
+        </message>
+        <message>
+            <source> • ~%1 min</source>
+            <translation> • ~%1 min</translation>
+        </message>
+        <message>
+            <source> • &lt;1 min</source>
+            <translation> • &lt;1 min</translation>
         </message>
     </context>
 </TS>

@@ -107,6 +107,24 @@ void SetPlayFullCache(bool full);
 [[nodiscard]] u64 TotalRealGraphicsCount() noexcept;
 [[nodiscard]] u64 TotalRealComputeCount() noexcept;
 
+/// Live status of background shader prebuilding after clicking "Play now" on the loading screen.
+struct BackgroundPrecacheStatus {
+    bool active{};
+    bool paused{};
+    u64 done{};
+    u64 total{};
+    u64 initial_total{}; ///< Phase 1 (Initial) boundary when running Total prioritized
+    u64 eta_seconds{};   ///< Estimated remaining seconds (0 if unknown)
+};
+
+void UpdateBackgroundPrecache(bool active, u64 done, u64 total, u64 initial_total, u64 eta_seconds);
+[[nodiscard]] BackgroundPrecacheStatus GetBackgroundPrecacheStatus();
+void SetBackgroundPrecachePaused(bool paused);
+[[nodiscard]] bool IsBackgroundPrecachePaused();
+void RequestStopBackgroundPrecache();
+[[nodiscard]] bool IsBackgroundPrecacheStopRequested();
+void ResetBackgroundPrecacheControls();
+
 /// The GPU driver, device and pipeline cache version pipelines were precached for.
 struct DriverStamp {
     u32 driver{};

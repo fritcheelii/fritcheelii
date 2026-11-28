@@ -245,12 +245,12 @@ LoadingScreen::LoadingScreen(QWidget* parent)
     connect(this, &LoadingScreen::LoadProgress, this, &LoadingScreen::OnLoadProgress,
             Qt::QueuedConnection);
 
-    // Shown while shaders are precached: starts the game without waiting for the rest.
-    skip_button = new QPushButton(tr("Skip"), this);
+    // Shown while shaders are precached: starts the game now and continues in the background.
+    skip_button = new QPushButton(tr("Play now"), this);
     skip_button->setStyleSheet(CheezyTheme::Transform(QString::fromUtf8(SKIP_BUTTON_STYLE)));
-    skip_button->setToolTip(tr("Start the game now. The shaders not built yet are built the next "
-                               "time the game starts, or while you play when the game needs "
-                               "them."));
+    skip_button->setToolTip(
+        tr("Start the game now and continue preparing the remaining shaders in the background "
+           "(early-game shaders are prioritized first)."));
     skip_button->hide();
     ui->verticalLayout->insertWidget(2, skip_button, 0, Qt::AlignHCenter | Qt::AlignTop);
     connect(skip_button, &QPushButton::clicked, this, [this] {

@@ -1460,6 +1460,7 @@ struct PipelineCache::RecipeRun {
     /// Where each environment of the file is: offset and size.
     std::vector<std::pair<u64, u64>> environments;
     u32 records{};
+    u32 initial_records{};
     std::mutex mutex;
     /// Key hashes no job of this run builds (again): built by an earlier precache for this
     /// driver, a job of the disk cache's, or taken by a job of this run.
@@ -1740,14 +1741,26 @@ std::shared_ptr<PipelineCache::RecipeRun> PipelineCache::AddRecipeJobs(
                      offsets.size(), verified_count, take, records, name);
         } else {
             offsets.reserve(entries.size());
+            size_t priority_count = 0;
+            // Phase 1 FIRST: Initial early-game shaders (opening, Kokiri, Deku, Hyrule)
+            // so even if the user clicks "Play now" immediately, the intro/early areas compile first.
             for (const auto& entry : entries) {
-                if (!entry.compute) {
+                if (!entry.compute && entry.gameplay_verified) {
+                    offsets.push_back(entry.offset);
+                    ++priority_count;
+                }
+            }
+            // Phase 2 SECOND: Remaining campaign shaders
+            for (const auto& entry : entries) {
+                if (!entry.compute && !entry.gameplay_verified) {
                     offsets.push_back(entry.offset);
                 }
             }
+            run->initial_records = static_cast<u32>(priority_count);
             LOG_INFO(Render_Vulkan,
-                     "Shader recipe (Total Real Cache): selected all {} graphics pipelines from {}",
-                     offsets.size(), name);
+                     "Shader recipe (Total Real Cache — Prioritized): {} initial + {} campaign = "
+                     "{} graphics pipelines from {}",
+                     priority_count, offsets.size() - priority_count, offsets.size(), name);
         }
         run->records = static_cast<u32>(offsets.size());
     } catch (const std::exception& e) {
@@ -2565,59 +2578,91 @@ void PipelineCache::PrecacheShaders(u64 title_id, std::vector<PrecacheJob> jobs,
         if (recipe) {
             recipe->in_game = true;
         }
+        ShaderWarm::ResetBackgroundPrecacheControls();
+        const u64 initial_boundary =
+            recipe && recipe->initial_records > 0
+                ? static_cast<u64>(recipe_begin + recipe->initial_records)
+                : 0;
         // One thread: two cost about 4 fps of 46 on a 6-core CPU that the game already keeps
         // busy (Ocarina, RX 6750 XT). EDEN_NX2_PRECACHE_AFTER_SKIP=2 lets two build.
         const char* const after_skip_env = std::getenv("EDEN_NX2_PRECACHE_AFTER_SKIP");
         const size_t game_threads =
             after_skip_env != nullptr && after_skip_env[0] == '2' && hardware_threads >= 12 ? 2 : 1;
         state->allowed_threads = 0;
+        ShaderWarm::UpdateBackgroundPrecache(true, state->done.load(), state->jobs.size(),
+                                             initial_boundary, 0);
         LOG_INFO(Render_Vulkan,
                  "Shader precache: skipped at {} of {}; the rest builds during the game on up to "
                  "{} threads (EDEN_NX2_PRECACHE_AFTER_SKIP=0 stops at Skip instead)",
                  state->done.load(), num_jobs, game_threads);
-        precache_after_skip = std::jthread([this, state, game_threads,
+        precache_after_skip = std::jthread([this, state, game_threads, initial_boundary,
                                             finish = std::move(finish)](std::stop_token stop) mutable {
             Common::SetCurrentThreadName("VkPrecacheAfterSkip");
             PipelineBinaryCache::SetBackgroundBuilderThread();
             Common::SetCurrentThreadPriority(Common::ThreadPriority::Low);
             auto last_log = std::chrono::steady_clock::now();
-            size_t logged_done = state->done.load();
+            const size_t bg_start_done = state->done.load();
+            double bg_active_seconds = 0.0;
+            size_t logged_done = bg_start_done;
             u32 short_ticks = 0;
             u32 minutes = 0;
             bool gave_up = false;
+            bool user_stopped = false;
             while (state->done < state->jobs.size() && !stop.stop_requested()) {
+                if (ShaderWarm::IsBackgroundPrecacheStopRequested()) {
+                    user_stopped = true;
+                    break;
+                }
                 size_t allowed = game_threads;
-                if (const auto room = Common::GetSystemCommitRoom()) {
-                    allowed = (std::min)(allowed, PrecacheThreadsForRoom(*room, game_threads));
-                    // The game itself needs the room: nothing builds under 3 GiB, and after a
-                    // minute of that the rest waits for the next start.
-                    if (*room < (u64{3} << 30)) {
-                        allowed = 0;
-                        if (++short_ticks >= 60) {
-                            LOG_WARNING(Render_Vulkan,
-                                        "Shader precache: under 3 GiB of memory left on this "
-                                        "system for a minute; the rest is built on a later start");
-                            gave_up = true;
-                            break;
+                if (ShaderWarm::IsBackgroundPrecachePaused()) {
+                    allowed = 0;
+                } else {
+                    if (const auto room = Common::GetSystemCommitRoom()) {
+                        allowed = (std::min)(allowed, PrecacheThreadsForRoom(*room, game_threads));
+                        // The game itself needs the room: nothing builds under 3 GiB, and after a
+                        // minute of that the rest waits for the next start.
+                        if (*room < (u64{3} << 30)) {
+                            allowed = 0;
+                            if (++short_ticks >= 60) {
+                                LOG_WARNING(Render_Vulkan,
+                                            "Shader precache: under 3 GiB of memory left on this "
+                                            "system for a minute; the rest is built on a later start");
+                                gave_up = true;
+                                break;
+                            }
+                        } else {
+                            short_ticks = 0;
                         }
-                    } else {
-                        short_ticks = 0;
+                    }
+                    // The game's own shader builds go first.
+                    if (workers.PendingWork() != 0) {
+                        allowed = 0;
                     }
                 }
-                // The game's own shader builds go first.
-                if (workers.PendingWork() != 0) {
-                    allowed = 0;
-                }
                 state->allowed_threads = allowed;
+                if (allowed > 0) {
+                    bg_active_seconds += 1.0;
+                }
+                const u64 cur_done = state->done.load();
+                const u64 cur_total = state->jobs.size();
+                u64 eta_seconds = 0;
+                if (cur_done > bg_start_done && bg_active_seconds >= 3.0 && cur_total > cur_done) {
+                    const double rate =
+                        static_cast<double>(cur_done - bg_start_done) / bg_active_seconds;
+                    if (rate > 0.01) {
+                        eta_seconds = static_cast<u64>(static_cast<double>(cur_total - cur_done) / rate);
+                    }
+                }
+                ShaderWarm::UpdateBackgroundPrecache(true, cur_done, cur_total, initial_boundary,
+                                                     eta_seconds);
                 if (const auto now = std::chrono::steady_clock::now();
                     now - last_log >= std::chrono::minutes{1}) {
                     LOG_INFO(Render_Vulkan,
                              "Shader precache during the game: {} of {} done, {} in the last "
                              "minute",
-                             state->done.load(), state->jobs.size(),
-                             state->done.load() - logged_done);
+                             cur_done, cur_total, cur_done - logged_done);
                     last_log = now;
-                    logged_done = state->done.load();
+                    logged_done = cur_done;
                     // Every five minutes the driver's cache is written, so a crash or a forced
                     // close keeps what was built (the next start finds it in the driver cache).
                     if (++minutes % 5 == 0) {
@@ -2629,10 +2674,12 @@ void PipelineCache::PrecacheShaders(u64 title_id, std::vector<PrecacheJob> jobs,
             const bool complete = state->done >= state->jobs.size();
             state->cancel = true;
             state->threads.clear();
+            ShaderWarm::UpdateBackgroundPrecache(false, 0, 0, 0, 0);
             finish(complete, !complete && stop.stop_requested(),
-                   complete  ? "finished during the game"
-                   : gave_up ? "stopped during the game, short of memory"
-                             : "stopped during the game (closed)");
+                   complete       ? "finished during the game"
+                   : user_stopped ? "stopped by user during the game"
+                   : gave_up      ? "stopped during the game, short of memory"
+                                  : "stopped during the game (closed)");
         });
         return;
     }

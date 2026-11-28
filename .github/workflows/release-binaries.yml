@@ -48,7 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           retry() { local n; for n in 1 2 3 4; do "$@" && return 0; echo "::warning::attempt $n of '$*' failed; retrying" >&2; sleep $((n * 30)); done; return 1; }
-          tag="v6.4"
+          tag="v6.5"
           if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/$tag" >/dev/null 2>&1; then
             retry gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/$tag" \
               -f "sha=$GITHUB_SHA" -F "force=true"
@@ -331,12 +331,12 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path "build/release/bin/cheezyemu.exe") {
-            Move-Item -Force "build/release/bin/cheezyemu.exe" "build/release/bin/FritCheeLii v6.4.exe"
+            Move-Item -Force "build/release/bin/cheezyemu.exe" "build/release/bin/FritCheeLii v6.5.exe"
           }
-          if (-not (Test-Path "build/release/bin/FritCheeLii v6.4.exe")) {
-            throw "build/release/bin/FritCheeLii v6.4.exe was not produced"
+          if (-not (Test-Path "build/release/bin/FritCheeLii v6.5.exe")) {
+            throw "build/release/bin/FritCheeLii v6.5.exe was not produced"
           }
-          windeployqt --release --no-translations "build/release/bin/FritCheeLii v6.4.exe"
+          windeployqt --release --no-translations "build/release/bin/FritCheeLii v6.5.exe"
 
       - name: Upload Windows binary
         if: startsWith(matrix.platform, 'windows')
@@ -381,8 +381,8 @@ jobs:
           export QMAKE="$QT_ROOT_DIR/bin/qmake"
           export EXTRA_QT_MODULES=waylandcompositor
           export EXTRA_PLATFORM_PLUGINS='libqwayland-egl.so;libqwayland-generic.so'
-          export LDAI_VERSION="v6.4-${GITHUB_SHA::7}"
-          export LDAI_OUTPUT="FritCheeLii-v6.4-Linux-x86_64.AppImage"
+          export LDAI_VERSION="v6.5-${GITHUB_SHA::7}"
+          export LDAI_OUTPUT="FritCheeLii-v6.5-Linux-x86_64.AppImage"
           export OUTPUT="$LDAI_OUTPUT"
           export ARCH="x86_64"
 
@@ -401,9 +401,9 @@ jobs:
 
           test -s "$LDAI_OUTPUT"
           mv "$LDAI_OUTPUT" linux-dist/
-          mv AppDir "FritCheeLii-v6.4"
-          ln -s usr/bin/FritCheeLii "FritCheeLii-v6.4/FritCheeLii"
-          tar -czf "linux-dist/FritCheeLii-v6.4-Linux-x86_64.tar.gz" "FritCheeLii-v6.4"
+          mv AppDir "FritCheeLii-v6.5"
+          ln -s usr/bin/FritCheeLii "FritCheeLii-v6.5/FritCheeLii"
+          tar -czf "linux-dist/FritCheeLii-v6.5-Linux-x86_64.tar.gz" "FritCheeLii-v6.5"
           ls -la linux-dist
 
       - name: Upload Linux binary
@@ -428,7 +428,7 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: FritCheeLii-windows-x86_64-pgo-${{ github.sha }}
-          path: "stage/FritCheeLii v6.4"
+          path: "stage/FritCheeLii v6.5"
 
       - name: Download Linux binaries
         uses: actions/download-artifact@v7
@@ -441,10 +441,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          test -f "stage/FritCheeLii v6.4/FritCheeLii v6.4.exe"
-          (cd stage && zip -qr "${GITHUB_WORKSPACE}/dist/FritCheeLii-v6.4-Windows-x64.zip" "FritCheeLii v6.4")
-          test -f "dist/FritCheeLii-v6.4-Linux-x86_64.AppImage"
-          test -f "dist/FritCheeLii-v6.4-Linux-x86_64.tar.gz"
+          test -f "stage/FritCheeLii v6.5/FritCheeLii v6.5.exe"
+          (cd stage && zip -qr "${GITHUB_WORKSPACE}/dist/FritCheeLii-v6.5-Windows-x64.zip" "FritCheeLii v6.5")
+          test -f "dist/FritCheeLii-v6.5-Linux-x86_64.AppImage"
+          test -f "dist/FritCheeLii-v6.5-Linux-x86_64.tar.gz"
           ls -la dist
 
       - name: Create release
@@ -454,7 +454,7 @@ jobs:
         run: |
           set -euo pipefail
           retry() { local n; for n in 1 2 3 4; do "$@" && return 0; echo "::warning::attempt $n of '$*' failed; retrying" >&2; sleep $((n * 30)); done; return 1; }
-          tag="v6.4"
+          tag="v6.5"
           tag_sha=$(retry gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" --jq '.object.sha')
           if [ "$tag_sha" != "$GITHUB_SHA" ]; then
             echo "Release tag ${tag} points to $tag_sha instead of $GITHUB_SHA"
@@ -463,13 +463,11 @@ jobs:
           cat > notes.md <<EOF
           > **Updating from an older version?** Keep or copy your existing \`user\` folder into the new FritCheeLii folder to preserve your saves, settings, and compiled shader cache (no need to rebuild shaders!).
 
-          ## What's New in v6.4
-          - **Custom FritCheeLii Windows PGO Profile (\`fritcheelii-windows.profdata\`):** Recorded directly on real *Ocarina of Time* gameplay across Hyrule Castle/Market, Hyrule Field/Lon Lon, Kokiri Forest, Kakariko Village, and Dodongo's Cavern with all 13 \`Extra+\` optimizations active
-          - **First-Launch Language Selector:** Prompts on first launch (pre-selected from your OS locale) to configure both emulator menus and the in-game *Ocarina of Time* language in one step
-          - **Multi-Save ALL Slots Backup & Restore (Slots 1–8):** Import and export all 8 Multi-Save slots (plus names & active slot) at once via portable folder or \`.zip\` backup
-          - **Graphics Tab Polish & Fixes:** Fixed \`NVIDIA DLSS Frame Gen\` visibility in the Windows dropdown, fixed clipped status text in the \`NVIDIA DLSS\` panel, aligned \`Upscaling Method\` 50/50, moved \`Frame Generation (Built-in)\` directly under \`Upscaling & 3D Render Scale\`, added explanatory tooltips, and reordered upscaling presets cleanly
-          - **Dynamic Shader Cache Manager & Clear Cache UX:** Reads exact compiled shader counts dynamically (\`12,760\` graphics + \`1,520\` compute = \`14,280\` total), clarifies resume-on-close on the shader building screen, and unifies \`Clear Shader Cache\` auto-restart into a single confirmation dialog
-          - **Edge-Flush Overlay (\`Margin = 0\`) & Auto-Warmup Benchmark:** Overlay sits flush against the screen corner and supports \`WARMUP 30s → BENCH 30s\` automated countdowns; removed \`Test\` tab after A/B validation
+          ## What's New in v6.5
+          - **Prioritized Background Shader Prebuild (`Play now` + Status Bar Controls):** Total Shader Cache (`11,621` real-gameplay shaders) now compiles Phase 1 (Initial early-game shaders: opening, Kokiri, Deku, Hyrule) **first** before Phase 2 (remaining campaign). Click **`Play now`** (`Jogar agora`) on the loading screen to jump straight into the game while 1 low-priority background thread finishes the rest!
+          - **Live Status Bar Progress + `⏸ Pause` / `⏹ Stop` Controls:** Shows live background shader progress, phase (`Initial` / campaign), and ETA right on the bottom status bar, with one-click Pause/Resume and Stop (progress is saved and resumes automatically on the next launch)
+          - **Smart First-Launch & Second-Launch Upgrade Flow:** Recommends Total Prioritized on first launch, and if you pick Initial first, offers a one-click upgrade to Total on your next launch
+          - **Pure Independent `.nx2recipe` (`11,621` real shaders):** Includes the new Kokiri / Deku Tree / Hyrule Castle shaders (`0` dropped, `0` failed) with real 0–100% gathering progress bar and Loading Screen Tip 3
 
           ## Highlights from v6.1
           - **Unified \`Upscaling Method\` + \`3D Render Scale\` UI, Lichii \`build-410\` Optical Flow 5-Level Frame Gen & NVIDIA DLSS-G:** Built-in Frame Gen without external apps, \`EXP115\` promoted to \`Extra+\` (13 switches ON), expanded real-gameplay cache (\`12,760\` gfx + \`1,520\` compute), slimmer \`PerformanceOverlay\` with live PDH Turbo Clock, fixed Ocarina \`Y\` guide sprite, and Windows 11 \`F11\` fullscreen fix
@@ -487,7 +485,7 @@ jobs:
             --verify-tag \
             --draft \
             --prerelease \
-            --title "FritCheeLii v6.4" \
+            --title "FritCheeLii v6.5" \
             --notes-file notes.md
 
       - name: Delete temporary Actions artifacts

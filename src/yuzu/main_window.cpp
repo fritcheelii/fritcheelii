@@ -1149,6 +1149,48 @@ void MainWindow::InitializeWidgets() {
     message_label->setAlignment(Qt::AlignLeft);
     statusBar()->addPermanentWidget(message_label, 1);
 
+    bg_precache_label = new QLabel();
+    bg_precache_label->setVisible(false);
+    bg_precache_label->setFrameStyle(QFrame::NoFrame);
+    bg_precache_label->setContentsMargins(6, 0, 2, 0);
+    bg_precache_label->setStyleSheet(QStringLiteral("color: #a78bfa; font-weight: 600;"));
+    bg_precache_label->setToolTip(
+        tr("Preparing remaining shaders in the background on 1 low-priority thread."));
+    statusBar()->addPermanentWidget(bg_precache_label);
+
+    const QString bg_btn_style = QStringLiteral(
+        "QPushButton { background: transparent; color: #c4b5fd; border: 1px solid #3b3556; "
+        "border-radius: 4px; padding: 0 5px; min-height: 18px; font-size: 11px; }"
+        "QPushButton:hover { background: #2a2440; color: #ffffff; border-color: #a78bfa; }");
+    bg_precache_pause_btn = new QPushButton(QStringLiteral("⏸"));
+    bg_precache_pause_btn->setVisible(false);
+    bg_precache_pause_btn->setFocusPolicy(Qt::NoFocus);
+    bg_precache_pause_btn->setCursor(Qt::PointingHandCursor);
+    bg_precache_pause_btn->setStyleSheet(bg_btn_style);
+    bg_precache_pause_btn->setToolTip(tr("Pause or resume background shader compilation."));
+    connect(bg_precache_pause_btn, &QPushButton::clicked, this, [this] {
+        const bool now_paused = !VideoCommon::ShaderWarm::IsBackgroundPrecachePaused();
+        VideoCommon::ShaderWarm::SetBackgroundPrecachePaused(now_paused);
+        bg_precache_pause_btn->setText(now_paused ? QStringLiteral("▶") : QStringLiteral("⏸"));
+    });
+    statusBar()->addPermanentWidget(bg_precache_pause_btn);
+
+    bg_precache_stop_btn = new QPushButton(QStringLiteral("⏹"));
+    bg_precache_stop_btn->setVisible(false);
+    bg_precache_stop_btn->setFocusPolicy(Qt::NoFocus);
+    bg_precache_stop_btn->setCursor(Qt::PointingHandCursor);
+    bg_precache_stop_btn->setStyleSheet(bg_btn_style);
+    bg_precache_stop_btn->setToolTip(
+        tr("Stop background shader compilation now. Everything already built is saved and resumes "
+           "automatically on your next launch."));
+    connect(bg_precache_stop_btn, &QPushButton::clicked, this, [this] {
+        VideoCommon::ShaderWarm::RequestStopBackgroundPrecache();
+        bg_precache_stop_btn->setEnabled(false);
+        bg_precache_pause_btn->setEnabled(false);
+        bg_precache_label->setText(tr("Stopping shader cache..."));
+    });
+    statusBar()->addPermanentWidget(bg_precache_stop_btn);
+
     shader_building_label = new QLabel();
     shader_building_label->setToolTip(tr("The amount of shaders currently being built"));
     res_scale_label = new QLabel();
@@ -3131,6 +3173,9 @@ void MainWindow::OnEmulationStopped() {
     if (game_controls_strip != nullptr) {
         game_controls_strip->Stop();
     }
+    bg_precache_label->setVisible(false);
+    bg_precache_pause_btn->setVisible(false);
+    bg_precache_stop_btn->setVisible(false);
     shader_building_label->setVisible(false);
     res_scale_label->setVisible(false);
     emu_speed_label->setVisible(false);
@@ -6091,6 +6136,39 @@ void MainWindow::UpdateStatusBar() {
         shader_building_label->setVisible(true);
     } else {
         shader_building_label->setVisible(false);
+    }
+
+    const auto bg_status = VideoCommon::ShaderWarm::GetBackgroundPrecacheStatus();
+    if (bg_status.active && bg_status.total > 0) {
+        const int pct = static_cast<int>(
+            (std::min<u64>)(bg_status.done * 100 / bg_status.total, 100));
+        if (bg_status.paused) {
+            bg_precache_label->setText(tr("Shaders paused (%1%)").arg(pct));
+            bg_precache_pause_btn->setText(QStringLiteral("▶"));
+        } else {
+            const bool in_initial_phase =
+                bg_status.initial_total > 0 && bg_status.done < bg_status.initial_total;
+            QString text = in_initial_phase
+                               ? tr("Preparing shaders %1% (Initial)").arg(pct)
+                               : tr("Preparing shaders %1%").arg(pct);
+            if (bg_status.eta_seconds >= 60) {
+                const u64 mins = (bg_status.eta_seconds + 30) / 60;
+                text += tr(" • ~%1 min").arg(mins);
+            } else if (bg_status.eta_seconds > 0) {
+                text += tr(" • <1 min");
+            }
+            bg_precache_label->setText(text);
+            bg_precache_pause_btn->setText(QStringLiteral("⏸"));
+        }
+        bg_precache_pause_btn->setEnabled(true);
+        bg_precache_stop_btn->setEnabled(true);
+        bg_precache_label->setVisible(true);
+        bg_precache_pause_btn->setVisible(true);
+        bg_precache_stop_btn->setVisible(true);
+    } else {
+        bg_precache_label->setVisible(false);
+        bg_precache_pause_btn->setVisible(false);
+        bg_precache_stop_btn->setVisible(false);
     }
 
     const auto res_info = Settings::values.resolution_info;

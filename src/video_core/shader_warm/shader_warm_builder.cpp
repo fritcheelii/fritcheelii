@@ -280,6 +280,13 @@ std::atomic<bool> warm_before_start{false};
 std::atomic<bool> skip_warm{false};
 std::atomic<StandaloneBuildMode> standalone_build_mode{StandaloneBuildMode::None};
 std::atomic<bool> play_full_cache{false};
+std::atomic<bool> bg_precache_active{false};
+std::atomic<bool> bg_precache_paused{false};
+std::atomic<bool> bg_precache_stop{false};
+std::atomic<u64> bg_precache_done{0};
+std::atomic<u64> bg_precache_total{0};
+std::atomic<u64> bg_precache_initial_total{0};
+std::atomic<u64> bg_precache_eta_seconds{0};
 
 /// Records `entries` for the finished precache file at `warm_file` (see WarmCountPath).
 void WriteWarmCount(const fs::path& warm_file, u64 entries) {
@@ -410,6 +417,50 @@ bool IsOotTotalCacheBuilt() {
     u64 entries = 0;
     rec_in >> sz >> wt >> entries;
     return entries >= TotalRealGraphicsCount();
+}
+
+void UpdateBackgroundPrecache(bool active, u64 done, u64 total, u64 initial_total,
+                              u64 eta_seconds) {
+    bg_precache_done.store(done, std::memory_order_relaxed);
+    bg_precache_total.store(total, std::memory_order_relaxed);
+    bg_precache_initial_total.store(initial_total, std::memory_order_relaxed);
+    bg_precache_eta_seconds.store(eta_seconds, std::memory_order_relaxed);
+    bg_precache_active.store(active, std::memory_order_release);
+}
+
+BackgroundPrecacheStatus GetBackgroundPrecacheStatus() {
+    BackgroundPrecacheStatus s;
+    s.active = bg_precache_active.load(std::memory_order_acquire);
+    if (!s.active) {
+        return s;
+    }
+    s.paused = bg_precache_paused.load(std::memory_order_relaxed);
+    s.done = bg_precache_done.load(std::memory_order_relaxed);
+    s.total = bg_precache_total.load(std::memory_order_relaxed);
+    s.initial_total = bg_precache_initial_total.load(std::memory_order_relaxed);
+    s.eta_seconds = bg_precache_eta_seconds.load(std::memory_order_relaxed);
+    return s;
+}
+
+void SetBackgroundPrecachePaused(bool paused) {
+    bg_precache_paused.store(paused, std::memory_order_relaxed);
+}
+
+bool IsBackgroundPrecachePaused() {
+    return bg_precache_paused.load(std::memory_order_relaxed);
+}
+
+void RequestStopBackgroundPrecache() {
+    bg_precache_stop.store(true, std::memory_order_relaxed);
+}
+
+bool IsBackgroundPrecacheStopRequested() {
+    return bg_precache_stop.load(std::memory_order_relaxed);
+}
+
+void ResetBackgroundPrecacheControls() {
+    bg_precache_paused.store(false, std::memory_order_relaxed);
+    bg_precache_stop.store(false, std::memory_order_relaxed);
 }
 
 fs::path PrecachedPipelinesPath(u64 title_id) {
